@@ -2,39 +2,60 @@ import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 
-function Login() {
+function Register() {
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
-    const { login } = useContext(AuthContext);
+    const { register } = useContext(AuthContext);
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters');
+            return;
+        }
+
         try {
-            await login(email, password);
+            await register(username, email, password);
             navigate('/dashboard');
         } catch (err) {
-            setError('Invalid email or password. Please try again.');
+            setError(err.response?.data?.email?.[0] || err.response?.data?.username?.[0] || 'Registration failed');
         }
-    };
-
-    const handleGoogleLogin = () => {
-        window.location.href = 'http://localhost:8000/accounts/google/login/';
     };
 
     return (
         <div style={styles.container}>
             <div style={styles.card}>
                 <div style={styles.header}>
-                    <h2 style={styles.title}>Welcome Back</h2>
-                    <p style={styles.subtitle}>Log in to FocusFlow to continue</p>
+                    <h2 style={styles.title}>Create Account</h2>
+                    <p style={styles.subtitle}>Join FocusFlow and boost your productivity</p>
                 </div>
 
                 {error && <div style={styles.errorBanner}>{error}</div>}
 
                 <form onSubmit={handleSubmit} style={styles.form}>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}>Username</label>
+                        <input
+                            type="text"
+                            placeholder="johndoe"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            style={styles.input}
+                            required
+                        />
+                    </div>
+
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>Email Address</label>
                         <input
@@ -59,26 +80,25 @@ function Login() {
                         />
                     </div>
 
-                    <button type="submit" style={styles.loginButton}>
-                        Sign In
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}>Confirm Password</label>
+                        <input
+                            type="password"
+                            placeholder="••••••••"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            style={styles.input}
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" style={styles.signUpButton}>
+                        Create Account
                     </button>
                 </form>
 
-                <div style={styles.divider}>
-                    <span style={styles.dividerText}>or</span>
-                </div>
-
-                <button onClick={handleGoogleLogin} style={styles.googleButton}>
-                    <img 
-                        src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-                        alt="Google" 
-                        style={styles.googleIcon} 
-                    />
-                    Continue with Google
-                </button>
-
                 <p style={styles.footerText}>
-                    Don't have an account? <Link to="/register" style={styles.link}>Register</Link>
+                    Already have an account? <Link to="/login" style={styles.link}>Log In</Link>
                 </p>
             </div>
         </div>
@@ -93,6 +113,7 @@ const styles = {
         minHeight: '100vh',
         backgroundColor: '#f4f7f6',
         fontFamily: "'Inter', sans-serif",
+        padding: '20px',
     },
     card: {
         backgroundColor: '#fff',
@@ -100,7 +121,7 @@ const styles = {
         borderRadius: '12px',
         boxShadow: '0 10px 25px rgba(0,0,0,0.05)',
         width: '100%',
-        maxWidth: '400px',
+        maxWidth: '450px',
     },
     header: {
         textAlign: 'center',
@@ -120,8 +141,8 @@ const styles = {
     errorBanner: {
         backgroundColor: '#fff1f0',
         color: '#f5222d',
-        padding: '10px',
-        borderRadius: '6px',
+        padding: '12px',
+        borderRadius: '8px',
         marginBottom: '20px',
         fontSize: '13px',
         textAlign: 'center',
@@ -132,7 +153,7 @@ const styles = {
         flexDirection: 'column',
     },
     inputGroup: {
-        marginBottom: '20px',
+        marginBottom: '18px',
     },
     label: {
         display: 'block',
@@ -148,12 +169,13 @@ const styles = {
         border: '1px solid #d9d9d9',
         fontSize: '14px',
         boxSizing: 'border-box',
-        transition: 'border-color 0.3s',
+        transition: 'all 0.3s ease',
+        outline: 'none',
     },
-    loginButton: {
+    signUpButton: {
         backgroundColor: '#007bff',
         color: '#fff',
-        padding: '12px',
+        padding: '14px',
         borderRadius: '8px',
         border: 'none',
         fontSize: '16px',
@@ -161,43 +183,6 @@ const styles = {
         cursor: 'pointer',
         transition: 'background-color 0.3s',
         marginTop: '10px',
-    },
-    divider: {
-        position: 'relative',
-        textAlign: 'center',
-        margin: '25px 0',
-        borderBottom: '1px solid #eee',
-    },
-    dividerText: {
-        position: 'absolute',
-        top: '-10px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        backgroundColor: '#fff',
-        padding: '0 10px',
-        color: '#999',
-        fontSize: '12px',
-        textTransform: 'uppercase',
-    },
-    googleButton: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        padding: '11px',
-        borderRadius: '8px',
-        border: '1px solid #d9d9d9',
-        backgroundColor: '#fff',
-        fontSize: '14px',
-        fontWeight: '500',
-        color: '#333',
-        cursor: 'pointer',
-        transition: 'background-color 0.3s',
-    },
-    googleIcon: {
-        width: '18px',
-        height: '18px',
-        marginRight: '10px',
     },
     footerText: {
         textAlign: 'center',
@@ -212,4 +197,4 @@ const styles = {
     }
 };
 
-export default Login;
+export default Register;
