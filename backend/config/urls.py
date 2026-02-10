@@ -22,6 +22,10 @@ urlpatterns = [
     # This tells Django: "Any URL starting with 'api/users/' 
     # should be handled by the users app"
     path('api/users/', include('users.urls')),
-    # path('api/tasks/', include('tasks.urls')),
-    # path('api/payments/', include('payments.urls')),
+    path('api/tasks/', include('tasks.urls')),
+    path('api/payments/', include('payments.urls')),
+
+    path('api/auth/', include('dj_rest_auth.urls')),
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('accounts/', include('allauth.urls')),
 ]
