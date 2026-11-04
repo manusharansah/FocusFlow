@@ -53,9 +53,8 @@ Premium access is granted only by verified Stripe webhooks (or by re-reading the
 
 ### Google sign-in
 
-Create an OAuth client in Google Cloud Console, authorised redirect URI
-`{your origin}/accounts/google/login/callback/`, then set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
-The button only appears when both are set.
+The feature is built. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `backend/.env` and the button appears.
+Console steps, the exact redirect URIs and troubleshooting are in [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md).
 
 ## Tests and checks
 
@@ -80,6 +79,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURIT
 - [docs/API.md](docs/API.md) - endpoint reference
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how auth, billing and data fit together
 - [docs/SECURITY.md](docs/SECURITY.md) - threat model, controls, incident checklist
+- [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md) - Google sign-in setup
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - environment, domains, Stripe/Google/email setup, backups
 - [docs/ROADMAP.md](docs/ROADMAP.md) - services needed to compete internationally
 

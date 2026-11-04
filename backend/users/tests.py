@@ -203,3 +203,63 @@ class HardeningTests(TestCase):
             self.assertEqual(codes[-1], 429)
             self.assertEqual(APIClient().post(reverse('login'), {'email': 'u@x.io', 'password': PW}, format='json').status_code, 429)
             cache.clear()
+
+
+class GoogleSignInTests(TestCase):
+    """The Google round trip itself needs real credentials; these cover our own logic around it."""
+
+    def _login(self, email, verified=True, uid='g-1'):
+        from allauth.account.models import EmailAddress
+        from allauth.socialaccount.models import SocialAccount, SocialLogin
+        from django.test import RequestFactory
+        from .adapters import SocialAdapter
+        request = RequestFactory().get('/')
+        request.session = self.client.session
+        request.user = __import__('django.contrib.auth.models', fromlist=['AnonymousUser']).AnonymousUser()
+        login = SocialLogin(user=User(email=email, username='g'), account=SocialAccount(provider='google', uid=uid, extra_data={}),
+                            email_addresses=[EmailAddress(email=email, verified=verified, primary=True)])
+        SocialAdapter().pre_social_login(request, login)
+        return login
+
+    def test_links_to_existing_verified_account(self):
+        u = User.objects.create_user('ann', 'ann@example.com', PW, email_verified=True)
+        login = self._login('Ann@Example.com')
+        self.assertEqual(login.user.pk, u.pk)
+        u.refresh_from_db(); self.assertTrue(u.has_usable_password())  # a verified owner keeps their password
+
+    def test_unverified_local_account_loses_attacker_password_and_sessions(self):
+        from rest_framework.test import APIClient
+        victim = User.objects.create_user('v', 'victim@example.com', 'attacker-chosen-pass-1', email_verified=False)
+        # an attacker holds a refresh token minted for the pre-registered account
+        from rest_framework_simplejwt.tokens import RefreshToken
+        stale = str(RefreshToken.for_user(victim))
+        login = self._login('victim@example.com')
+        victim.refresh_from_db()
+        self.assertEqual(login.user.pk, victim.pk)
+        self.assertTrue(victim.email_verified)
+        self.assertFalse(victim.has_usable_password())
+        attacker = APIClient(); attacker.cookies['ff_refresh'] = stale
+        self.assertEqual(attacker.post(reverse('token_refresh')).status_code, 401)
+
+    def test_unverified_google_address_is_never_linked(self):
+        u = User.objects.create_user('ann', 'ann@example.com', PW, email_verified=True)
+        login = self._login('ann@example.com', verified=False)
+        self.assertNotEqual(getattr(login.user, 'pk', None), u.pk)
+
+    def test_new_google_user_is_created_verified_without_a_password(self):
+        from allauth.socialaccount.models import SocialLogin
+        from django.test import RequestFactory
+        from allauth.account.models import EmailAddress
+        from allauth.socialaccount.models import SocialAccount
+        from .adapters import SocialAdapter
+        login = SocialLogin(user=User(), account=SocialAccount(provider='google', uid='g-2', extra_data={}),
+                            email_addresses=[EmailAddress(email='new@example.com', verified=True, primary=True)])
+        user = SocialAdapter().populate_user(RequestFactory().get('/'), login, {'email': 'new@example.com', 'username': 'newbie'})
+        self.assertTrue(user.email_verified)
+
+    @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
+    def test_csrf_endpoint_reports_google_flag(self):
+        with override_settings(GOOGLE_ENABLED=False):
+            self.assertFalse(APIClient().get(reverse('csrf')).data['google'])
+        with override_settings(GOOGLE_ENABLED=True):
+            self.assertTrue(APIClient().get(reverse('csrf')).data['google'])

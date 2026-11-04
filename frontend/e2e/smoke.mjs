@@ -105,6 +105,22 @@ console.log(`\nSmoke test against ${BASE}\n`);
     }
     assert((await (await page.request.get(`${BASE}/favicon.svg`)).text()).includes('<svg'), 'favicon is not an svg');
   });
+  await check('Google sign-in: when configured, the button starts a PKCE flow to Google (skipped otherwise)', async () => {
+    const cfg = await (await page.request.get(`${BASE}/api/users/csrf/`)).json();
+    if (!cfg.google) return;
+    const gp = await (await newCtx()).newPage();
+    await gp.goto(`${BASE}/login`); await gp.waitForSelector('text=Continue with Google');
+    const [req] = await Promise.all([
+      gp.waitForRequest((r) => r.url().startsWith('https://accounts.google.com/o/oauth2/')),
+      gp.click('button:has-text("Continue with Google")'),
+    ]);
+    const u = new URL(req.url());
+    assert(u.searchParams.get('response_type') === 'code', 'not the authorization-code flow');
+    assert(u.searchParams.get('code_challenge_method') === 'S256', 'PKCE missing');
+    assert(u.searchParams.get('state'), 'state missing');
+    assert(u.searchParams.get('redirect_uri') === `${BASE}/accounts/google/login/callback/`, `redirect_uri is ${u.searchParams.get('redirect_uri')}`);
+    await gp.context().close();
+  });
   await check('Webhook rejects unsigned requests', async () => {
     const r = await page.request.post(`${BASE}/api/payments/webhook/`, { data: '{}', headers: { 'content-type': 'application/json' } });
     assert([400, 503].includes(r.status()), `status ${r.status()}`);

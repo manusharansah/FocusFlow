@@ -7,7 +7,9 @@ const backend = process.env.DEV_BACKEND || 'http://localhost:8000';
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: 3000, proxy: { '/api': backend, '/accounts': backend } },
+  // changeOrigin:false keeps the browser's Host header (localhost:3000), so the OAuth callback URL Django builds
+  // is the SPA origin, exactly as in production.
+  server: { port: 3000, proxy: { '/api': { target: backend, changeOrigin: false }, '/accounts': { target: backend, changeOrigin: false } } },
   build: { outDir: 'build', sourcemap: false },
   test: { environment: 'jsdom', globals: true, setupFiles: './src/setupTests.js' },
 });
