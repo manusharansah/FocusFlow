@@ -35,6 +35,7 @@ class AuthTests(TestCase):
 
     def test_login_refresh_logout_flow(self):
         self.register()
+        User.objects.update(email_verified=True)
         r = self.c.post(reverse('login'), {'email': 'ANN@example.com', 'password': PW}, format='json')
         self.assertEqual(r.status_code, 200)
         self.assertIn('access', r.data)
@@ -115,3 +116,90 @@ class ThrottleTests(TestCase):
         codes = [c.post(reverse('login'), {'email': 'a@b.co', 'password': 'x'}, format='json').status_code for _ in range(12)]
         self.assertIn(429, codes)
         cache.clear()
+
+
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
+class HardeningTests(TestCase):
+    def setUp(self):
+        self.c = APIClient()
+
+    def make(self, verified=True, **kw):
+        return User.objects.create_user('u', 'u@x.io', PW, email_verified=verified, **kw)
+
+    def test_unverified_cannot_login(self):
+        self.make(verified=False)
+        r = self.c.post(reverse('login'), {'email': 'u@x.io', 'password': PW}, format='json')
+        self.assertEqual((r.status_code, r.data['code']), (403, 'email_not_verified'))
+
+    def test_register_duplicate_email_is_uniform(self):
+        self.make()
+        r = self.c.post(reverse('register'), {'username': 'new', 'email': 'U@x.io', 'password': PW}, format='json')
+        self.assertEqual(r.status_code, 201)
+        r2 = self.c.post(reverse('register'), {'username': 'new2', 'email': 'u@x.io', 'password': PW}, format='json')
+        self.assertEqual(r2.status_code, 201)
+
+    def test_verification_and_reset_tokens_not_interchangeable(self):
+        from .tokens import email_verification_token, password_reset_token
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        u = self.make(verified=False)
+        uid = urlsafe_base64_encode(force_bytes(u.pk))
+        vt = email_verification_token.make_token(u)
+        r = self.c.post(reverse('password_reset_confirm'), {'uid': uid, 'token': vt, 'password': 'brand-New-pass-77'}, format='json')
+        self.assertEqual(r.status_code, 400)
+        rt = password_reset_token.make_token(u)
+        self.assertEqual(self.c.post(reverse('verify_email'), {'uid': uid, 'token': rt}, format='json').status_code, 400)
+        self.assertEqual(self.c.post(reverse('verify_email'), {'uid': uid, 'token': vt}, format='json').status_code, 200)
+        # verification token is single-use (hash includes email_verified)
+        self.assertEqual(self.c.post(reverse('verify_email'), {'uid': uid, 'token': vt}, format='json').status_code, 400)
+
+    def test_password_reset_revokes_existing_sessions(self):
+        from .tokens import password_reset_token
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        u = self.make()
+        r = self.c.post(reverse('login'), {'email': 'u@x.io', 'password': PW}, format='json')
+        stolen = r.cookies['ff_refresh'].value
+        uid = urlsafe_base64_encode(force_bytes(u.pk))
+        ok = self.c.post(reverse('password_reset_confirm'),
+                         {'uid': uid, 'token': password_reset_token.make_token(u), 'password': 'brand-New-pass-77'}, format='json')
+        self.assertEqual(ok.status_code, 200)
+        attacker = APIClient(); attacker.cookies['ff_refresh'] = stolen
+        self.assertEqual(attacker.post(reverse('token_refresh')).status_code, 401)
+
+    def test_refresh_reuse_revokes_whole_family(self):
+        self.make()
+        r = self.c.post(reverse('login'), {'email': 'u@x.io', 'password': PW}, format='json')
+        first = r.cookies['ff_refresh'].value
+        r2 = self.c.post(reverse('token_refresh'))
+        second = r2.cookies['ff_refresh'].value
+        thief = APIClient(); thief.cookies['ff_refresh'] = first       # replay of a used token
+        self.assertEqual(thief.post(reverse('token_refresh')).status_code, 401)
+        legit = APIClient(); legit.cookies['ff_refresh'] = second      # successor is now revoked too
+        self.assertEqual(legit.post(reverse('token_refresh')).status_code, 401)
+
+    def test_oauth_complete_converts_session_to_refresh_cookie(self):
+        u = self.make()
+        self.c.force_login(u)
+        r = self.c.get(reverse('oauth_complete'))
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r['Location'].endswith('/auth/callback'))
+        self.assertIn('ff_refresh', r.cookies)
+        # session destroyed after the hand-off
+        self.assertEqual(self.c.get(reverse('oauth_complete'))['Location'].split('/')[-1], 'login?error=oauth')
+
+    def test_oauth_complete_without_session_redirects_to_error(self):
+        r = APIClient().get(reverse('oauth_complete'))
+        self.assertTrue(r['Location'].endswith('/login?error=oauth'))
+
+    def test_per_account_login_lockout(self):
+        from django.core.cache import cache
+        with override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'lock'}}):
+            cache.clear(); self.make()
+            codes = []
+            for i in range(10):
+                codes.append(APIClient().post(reverse('login'), {'email': 'u@x.io', 'password': 'bad'}, format='json',
+                                              HTTP_X_FORWARDED_FOR=f'10.0.0.{i}').status_code)
+            self.assertEqual(codes[-1], 429)
+            self.assertEqual(APIClient().post(reverse('login'), {'email': 'u@x.io', 'password': PW}, format='json').status_code, 429)
+            cache.clear()

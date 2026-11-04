@@ -7,7 +7,7 @@ function Meta({ task, placeholder = false }) {
   return (
     <>
       <span className={`badge badge-${task.priority}`}>{PRIORITIES.find((p) => p.key === task.priority)?.label}</span>
-      {!due && placeholder && <span />}
+      {!due && placeholder && <span className="due-empty" />}
       {due && <span className={`due${isOverdue(task) ? ' badge badge-overdue' : ''}`}>{due}</span>}
     </>
   );
@@ -16,7 +16,7 @@ function Meta({ task, placeholder = false }) {
 function CheckButton({ task, onToggle }) {
   return (
     <button type="button" className="check" role="checkbox" aria-checked={task.completed}
-      aria-label={`Mark "${task.title}" as ${task.completed ? 'not done' : 'done'}`} onClick={() => onToggle(task)}>
+      aria-label={task.title} onClick={() => onToggle(task)}>
       {task.completed && <Icon name="check" size={12} strokeWidth={3.5} />}
     </button>
   );
@@ -43,7 +43,7 @@ export function TaskList({ tasks, onToggle, onDelete }) {
               <li key={t.id} className={`row${t.completed ? ' done' : ''}`}>
                 <CheckButton task={t} onToggle={onToggle} />
                 <span className="title" title={t.title}>{t.title}</span>
-                <Meta task={t} placeholder />
+                <span className="row-meta"><Meta task={t} placeholder /></span>
                 <button className="icon-btn" aria-label={`Delete "${t.title}"`} onClick={() => onDelete(t)}><Icon name="trash" size={16} /></button>
               </li>
             ))}
@@ -70,7 +70,7 @@ export function TaskBoard({ tasks, onMove, onToggle, onDelete }) {
         return (
           <section key={s.key} className={`column${over === s.key ? ' over' : ''}`} aria-label={s.label}
             onDragOver={(e) => { e.preventDefault(); setOver(s.key); }}
-            onDragLeave={() => setOver(null)} onDrop={(e) => drop(e, s.key)}>
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null); }} onDrop={(e) => drop(e, s.key)}>
             <div className="column-head"><span className={`dot ${s.key}`} />{s.label}<span className="count">{items.length}</span></div>
             {items.map((t) => (
               <article key={t.id} className="tcard" draggable
@@ -81,7 +81,7 @@ export function TaskBoard({ tasks, onMove, onToggle, onDelete }) {
                 </div>
                 <div className="meta"><Meta task={t} /></div>
                 <div className="foot">
-                  <label className="sr-only" htmlFor={`mv-${t.id}`}>Move task</label>
+                  <label className="sr-only" htmlFor={`mv-${t.id}`}>Move "{t.title}" to column</label>
                   <select id={`mv-${t.id}`} value={t.status} onChange={(e) => onMove(t, e.target.value)}>
                     {STATUSES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                   </select>

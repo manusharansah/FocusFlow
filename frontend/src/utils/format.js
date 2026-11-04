@@ -28,7 +28,9 @@ export function formatDue(iso) {
 
 export const isOverdue = (task) => !task.completed && task.due_date && parseDate(task.due_date) < startOfToday();
 
-export function formatMoney(amount, currency) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: amount % 100 === 0 ? 0 : 2 })
-    .format(amount / 100);
+export function formatMoney(minorUnits, currency) {
+  const code = currency.toUpperCase();
+  const digits = new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits;
+  const major = minorUnits / 10 ** digits;
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: code, minimumFractionDigits: Number.isInteger(major) ? 0 : digits }).format(major);
 }

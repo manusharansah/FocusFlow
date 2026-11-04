@@ -68,13 +68,14 @@ def create_portal(user):
 def apply_subscription(user, sub):
     """Mirror a Stripe Subscription object onto the user."""
     status = sub['status']
-    item = (sub.get('items') or {}).get('data', [{}])[0]
+    items = (sub.get('items') or {}).get('data') or [{}]
+    item = items[0]
     period_end = sub.get('current_period_end') or item.get('current_period_end')
     user.stripe_customer_id = sub.get('customer') or user.stripe_customer_id
     user.stripe_subscription_id = sub['id']
     user.subscription_status = status
     user.premium_until = _ts(period_end)
-    user.cancel_at_period_end = bool(sub.get('cancel_at_period_end'))
+    user.cancel_at_period_end = bool(sub.get('cancel_at_period_end') or sub.get('cancel_at'))
     was_premium = user.is_premium
     user.is_premium = status in ACTIVE_STATES
     if user.is_premium and not was_premium:
@@ -108,42 +109,79 @@ def handle_event(event):
     try:
         with transaction.atomic():
             StripeEvent.objects.create(event_id=event['id'], type=event['type'])
-            _dispatch(event['type'], event['data']['object'])
     except IntegrityError:
         log.info('Duplicate Stripe event %s ignored', event['id'])
+        return
+    try:
+        with transaction.atomic():
+            _dispatch(event['type'], event['data']['object'])
+    except Exception:
+        # Let Stripe retry: forget that we saw the event.
+        StripeEvent.objects.filter(event_id=event['id']).delete()
+        raise
+
+
+def _live_subscription(sub_id):
+    """Stripe does not guarantee event order, so always apply the subscription's CURRENT state."""
+    return client().Subscription.retrieve(sub_id)
 
 
 def _dispatch(etype, obj):
     if etype in ('customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'):
         user = _user_for(obj)
-        if user:
-            apply_subscription(user, obj)
-        else:
+        if not user:
             log.warning('Subscription %s has no matching user', obj.get('id'))
+            return
+        # Ignore events for an older subscription once the user has moved to a newer live one.
+        if user.stripe_subscription_id and user.stripe_subscription_id != obj['id'] and user.is_premium:
+            return
+        apply_subscription(user, _live_subscription(obj['id']))
     elif etype == 'checkout.session.completed':
         user = _user_for(obj)
         if user and obj.get('subscription'):
-            apply_subscription(user, client().Subscription.retrieve(obj['subscription']))
+            apply_subscription(user, _live_subscription(obj['subscription']))
     elif etype == 'invoice.paid':
         user = _user_for(obj)
         Payment.objects.get_or_create(
             stripe_invoice_id=obj['id'],
-            defaults={'user': user, 'amount': Decimal(obj['amount_paid']) / 100,
+            defaults={'user': user, 'amount': minor_to_major(obj['amount_paid'], obj['currency']),
                       'currency': obj['currency'], 'status': 'paid'})
     elif etype == 'invoice.payment_failed':
         user = _user_for(obj)
-        if user:
-            user.subscription_status = 'past_due'
-            user.save(update_fields=['subscription_status'])
+        sub_id = obj.get('subscription') or (user.stripe_subscription_id if user else '')
+        if user and sub_id:
+            apply_subscription(user, _live_subscription(sub_id))
+
+
+ZERO_DECIMAL = {'bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf'}
+
+
+def minor_to_major(amount, currency):
+    return Decimal(amount) if currency.lower() in ZERO_DECIMAL else Decimal(amount) / 100
 
 
 def cancel_for_deleted_user(user):
-    """Stop billing before an account is erased."""
-    if configured() and user.stripe_subscription_id:
-        try:
-            client().Subscription.cancel(user.stripe_subscription_id)
-        except Exception:
-            log.exception('Could not cancel Stripe subscription for user %s', user.pk)
+    """Stop billing and erase the Stripe customer before an account is deleted.
+
+    Returns False if billing could not be stopped, in which case the deletion must be aborted.
+    """
+    if not configured() or not (user.stripe_subscription_id or user.stripe_customer_id):
+        return True
+    try:
+        if user.stripe_subscription_id:
+            try:
+                client().Subscription.cancel(user.stripe_subscription_id)
+            except stripe.InvalidRequestError:
+                pass  # already cancelled / no such subscription
+        if user.stripe_customer_id:
+            try:
+                client().Customer.delete(user.stripe_customer_id)
+            except stripe.InvalidRequestError:
+                pass
+        return True
+    except stripe.StripeError:
+        log.exception('Could not cancel Stripe billing for user %s', user.pk)
+        return False
 
 
 def plan_catalog():

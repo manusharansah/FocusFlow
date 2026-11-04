@@ -133,6 +133,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PARSER_CLASSES': ('rest_framework.parsers.JSONParser',),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
+    # Number of trusted reverse proxies in front of the app; DRF then ignores client-supplied XFF entries.
+    'NUM_PROXIES': int(os.environ.get('NUM_PROXIES', '1')),
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
@@ -140,7 +142,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/min',
         'user': '300/min',
-        'auth': '10/min',          # login, register, verify/reset confirm
+        'auth': '20/min',          # per IP; brute force is additionally capped per account (users.views.LOGIN_ATTEMPTS)
         'refresh': '60/min',       # session restore on page load
         'sensitive': '5/hour',     # password reset, verification e-mails
         'payments': '20/hour',
@@ -233,8 +235,11 @@ if os.environ.get('EMAIL_HOST'):
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
     EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
-else:
+elif DEBUG or TESTING:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # Never print password-reset/verification links to production logs.
+    raise ImproperlyConfigured('EMAIL_HOST is required when DEBUG is off (verification and reset e-mails).')
 
 # --- Static / i18n ---------------------------------------------------------
 STATIC_URL = 'static/'

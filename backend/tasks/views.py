@@ -1,5 +1,6 @@
-from django.conf import settings
+from django.db import transaction
 from rest_framework import status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -10,8 +11,15 @@ from .serializers import FocusSessionSerializer, TaskSerializer
 FREE_TASK_LIMIT = 10
 
 
+class TaskPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
+    pagination_class = TaskPagination
 
     def get_queryset(self):
         qs = Task.objects.filter(user=self.request.user)
@@ -30,9 +38,12 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not user.is_premium and Task.objects.filter(user=user).count() >= FREE_TASK_LIMIT:
-            raise PermissionDenied(f'The free plan is limited to {FREE_TASK_LIMIT} tasks. Upgrade to Premium for unlimited tasks.')
-        serializer.save(user=user)
+        with transaction.atomic():
+            # Lock the user row so parallel requests cannot all pass the limit check.
+            type(user).objects.select_for_update().get(pk=user.pk)
+            if not user.is_premium and Task.objects.filter(user=user).count() >= FREE_TASK_LIMIT:
+                raise PermissionDenied(f'The free plan is limited to {FREE_TASK_LIMIT} tasks. Upgrade to Premium for unlimited tasks.')
+            serializer.save(user=user)
 
     @action(detail=False, methods=['post'], url_path='focus-session')
     def create_focus_session(self, request):

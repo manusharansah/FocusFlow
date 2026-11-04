@@ -70,7 +70,9 @@ class PaymentTests(TestCase):
         r = APIClient().post('/api/payments/webhook/', '{}', content_type='application/json', HTTP_STRIPE_SIGNATURE='bad')
         self.assertEqual(r.status_code, 400)
 
-    def test_webhook_subscription_lifecycle_and_idempotency(self):
+    @mock.patch('payments.services.stripe')
+    def test_webhook_subscription_lifecycle_and_idempotency(self, st):
+        st.Subscription.retrieve.return_value = sub(self.u)
         ev = {'id': 'evt_1', 'type': 'customer.subscription.created', 'data': {'object': sub(self.u)}}
         self.assertEqual(self.hook(ev).status_code, 200)
         self.u.refresh_from_db(); self.assertTrue(self.u.is_premium)
@@ -78,9 +80,48 @@ class PaymentTests(TestCase):
         self.assertEqual(self.hook(ev).status_code, 200)  # replay
         self.assertEqual(StripeEvent.objects.count(), 1)
 
-        ev2 = {'id': 'evt_2', 'type': 'customer.subscription.deleted', 'data': {'object': sub(self.u, 'canceled')}}
-        self.hook(ev2)
+        st.Subscription.retrieve.return_value = sub(self.u, 'canceled')
+        self.hook({'id': 'evt_2', 'type': 'customer.subscription.deleted', 'data': {'object': sub(self.u, 'canceled')}})
         self.u.refresh_from_db(); self.assertFalse(self.u.is_premium)
+
+    @mock.patch('payments.services.stripe')
+    def test_out_of_order_event_cannot_regrant_premium(self, st):
+        # The LIVE state at Stripe is canceled; a stale "active" event arrives late.
+        st.Subscription.retrieve.return_value = sub(self.u, 'canceled')
+        self.hook({'id': 'evt_late', 'type': 'customer.subscription.updated', 'data': {'object': sub(self.u, 'active')}})
+        self.u.refresh_from_db(); self.assertFalse(self.u.is_premium)
+
+    @mock.patch('payments.services.stripe')
+    def test_failed_processing_is_retryable(self, st):
+        st.Subscription.retrieve.side_effect = RuntimeError('stripe down')
+        ev = {'id': 'evt_retry', 'type': 'customer.subscription.updated', 'data': {'object': sub(self.u)}}
+        self.assertEqual(self.hook(ev).status_code, 500)
+        self.assertFalse(StripeEvent.objects.filter(event_id='evt_retry').exists())  # so Stripe's retry is processed
+        st.Subscription.retrieve.side_effect = None
+        st.Subscription.retrieve.return_value = sub(self.u)
+        self.assertEqual(self.hook(ev).status_code, 200)
+        self.u.refresh_from_db(); self.assertTrue(self.u.is_premium)
+
+    def test_past_due_user_cannot_open_second_subscription(self):
+        self.u.subscription_status = 'past_due'; self.u.save()
+        r = self.c.post('/api/payments/create-checkout/', {'plan': 'monthly'}, format='json')
+        self.assertEqual(r.status_code, 409)
+
+    @mock.patch('payments.services.stripe')
+    def test_account_deletion_aborts_if_billing_cannot_be_cancelled(self, st):
+        import stripe as real
+        st.StripeError = real.StripeError; st.InvalidRequestError = real.InvalidRequestError
+        self.u.stripe_subscription_id = 'sub_1'; self.u.save()
+        st.Subscription.cancel.side_effect = real.APIConnectionError('down')
+        self.u.set_password('pw-123456789'); self.u.save()
+        r = self.c.delete('/api/users/profile/', {'password': 'pw-123456789'}, format='json')
+        self.assertEqual(r.status_code, 503)
+        self.assertTrue(User.objects.filter(pk=self.u.pk).exists())
+
+    def test_zero_decimal_currency_amount(self):
+        from .services import minor_to_major
+        self.assertEqual(str(minor_to_major(500, 'jpy')), '500')
+        self.assertEqual(str(minor_to_major(999, 'usd')), '9.99')
 
     def test_webhook_invoice_paid_records_payment_once(self):
         inv = {'id': 'in_1', 'amount_paid': 999, 'currency': 'usd', 'customer': 'cus_1', 'metadata': {}}

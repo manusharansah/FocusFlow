@@ -35,8 +35,11 @@ class FocusSessionSerializer(serializers.ModelSerializer):
         fields = ['id', 'duration_minutes', 'task', 'completed', 'started_at']
         read_only_fields = ['id', 'started_at']
 
-    def validate_task(self, task):
-        # Prevent linking a session to another user's task (IDOR).
-        if task is not None and task.user_id != self.context['request'].user.id:
-            raise serializers.ValidationError('Task not found.')
-        return task
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get('request')
+        if request is not None and request.user.is_authenticated:
+            # Scope the lookup to the caller: foreign and non-existent ids are indistinguishable.
+            fields['task'].queryset = Task.objects.filter(user=request.user)
+            fields['task'].error_messages['does_not_exist'] = 'Task not found.'
+        return fields

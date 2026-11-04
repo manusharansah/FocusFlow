@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api, { errorMessage, refreshSession } from '../utils/api';
+import api, { errorCode, errorMessage, refreshSession } from '../utils/api';
 import Loading from '../components/Loading';
 
 function GoogleButton() {
@@ -42,21 +42,36 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(params.get('error') ? 'Google sign-in failed. Please try again.' : '');
   const [busy, setBusy] = useState(false);
+  const [unverified, setUnverified] = useState(false);
+  const [resent, setResent] = useState(false);
   // Only allow same-site relative redirects (prevents open redirects).
   const from = typeof location.state?.from === 'string' && /^\/(?!\/)/.test(location.state.from) ? location.state.from : '/app';
 
   useEffect(() => { if (user) navigate(from, { replace: true }); }, [user, from, navigate]);
 
   const submit = async (e) => {
-    e.preventDefault(); setBusy(true); setError('');
-    try { await login(email, password); } catch (err) { setError(errorMessage(err, 'Could not sign in.')); setBusy(false); }
+    e.preventDefault(); setBusy(true); setError(''); setUnverified(false); setResent(false);
+    try { await login(email, password); } catch (err) {
+      setUnverified(errorCode(err) === 'email_not_verified');
+      setError(errorMessage(err, 'Could not sign in.'));
+      setBusy(false);
+    }
+  };
+  const resend = async () => {
+    try { await api.post('/users/resend-verification/', { email }); } catch { /* uniform response either way */ }
+    setResent(true);
   };
 
   return (
     <div className="auth-wrap">
       <div className="card auth-card">
         <h1>Welcome back</h1><p className="sub">Sign in to your FocusFlow account.</p>
-        {error && <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">{error}</div>}
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">
+            {error}
+            {unverified && (resent ? <> <strong>New link sent.</strong></> : <> <button type="button" className="link-btn" onClick={resend}>Resend verification email</button></>)}
+          </div>
+        )}
         <form className="stack" onSubmit={submit}>
           <div className="field"><label htmlFor="email">Email</label>
             <input id="email" type="email" className="input" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
@@ -91,8 +106,8 @@ export function Register() {
     return (
       <div className="auth-wrap"><div className="card auth-card">
         <h1>Check your inbox</h1>
-        <p className="sub">If this email can be used, we sent a verification link to <strong>{form.email}</strong>. You can sign in right away.</p>
-        <Link to="/login" className="btn btn-block">Continue to sign in</Link>
+        <p className="sub">If this email can be used, we sent a verification link to <strong>{form.email}</strong>. Open it to activate your account, then sign in.</p>
+        <Link to="/login" className="btn btn-block">Go to sign in</Link>
       </div></div>
     );
   }

@@ -10,7 +10,8 @@ If you must split domains, keep them on the same registrable domain (`app.` / `a
 ## Steps
 
 1. Provision PostgreSQL (managed, with PITR backups) and set `DATABASE_URL`.
-2. Copy `backend/.env.example` to `.env` (or set variables in your host). Required: `SECRET_KEY`, `ALLOWED_HOSTS`,
+2. Set `NUM_PROXIES` to the number of trusted proxies in front of the API (nginx only = 1; CDN + nginx = 2), otherwise rate limits can be spoofed. `EMAIL_HOST` is mandatory in production.
+2b. Copy `backend/.env.example` to `.env` (or set variables in your host). Required: `SECRET_KEY`, `ALLOWED_HOSTS`,
    `FRONTEND_URL`, `BACKEND_URL`, `DATABASE_URL`. Set `BEHIND_PROXY=True` when TLS terminates upstream.
 3. `docker compose up --build -d` (or run the two images on your platform). Migrations run on boot in compose; run
    `python manage.py migrate` as a release step elsewhere.

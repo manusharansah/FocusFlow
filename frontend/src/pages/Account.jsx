@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api, { errorMessage } from '../utils/api';
@@ -11,6 +11,13 @@ export default function Account() {
   const [confirming, setConfirming] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (confirming && !d.open) d.showModal(); // native focus trap, Escape and inert background
+    if (!confirming && d.open) d.close();
+  }, [confirming]);
 
   const saveProfile = async (e) => {
     e.preventDefault(); setMsg(null);
@@ -44,7 +51,7 @@ export default function Account() {
   return (
     <>
       <div className="page-head"><div><h1>Account</h1><p>Manage your profile, subscription and data.</p></div></div>
-      {msg && <div className={`alert alert-${msg.kind}`} style={{ marginBottom: 16 }} role="status">{msg.text}</div>}
+      {msg && <div className={`alert alert-${msg.kind}`} style={{ marginBottom: 16 }} role={msg.kind === 'error' ? 'alert' : 'status'}>{msg.text}</div>}
       <div style={{ maxWidth: 720 }}>
         <section className="card card-pad section-card">
           <h2 className="card-title" style={{ marginBottom: 14 }}>Profile</h2>
@@ -81,21 +88,19 @@ export default function Account() {
         </section>
       </div>
 
-      {confirming && (
-        <div className="dialog-back" role="dialog" aria-modal="true" aria-labelledby="del-title">
-          <form className="card dialog" onSubmit={deleteAccount}>
-            <h2 id="del-title" className="card-title">Delete your account?</h2>
-            <p className="card-sub">This permanently erases your tasks, sessions and profile, and cancels any subscription. This cannot be undone.</p>
-            <div className="field"><label htmlFor="del-pw">Confirm with your password</label>
-              <input id="del-pw" type="password" className="input" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} />
-              <span className="hint">Signed up with Google? Leave this blank.</span></div>
-            <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setConfirming(false)}>Cancel</button>
-              <button className="btn btn-danger" disabled={busy}>Delete forever</button>
-            </div>
-          </form>
-        </div>
-      )}
+      <dialog ref={dialogRef} className="dialog-native" aria-labelledby="del-title" onClose={() => setConfirming(false)}>
+        <form className="dialog stack" onSubmit={deleteAccount}>
+          <h2 id="del-title" className="card-title">Delete your account?</h2>
+          <p className="card-sub">This permanently erases your tasks, sessions and profile, and cancels any subscription. This cannot be undone.</p>
+          <div className="field"><label htmlFor="del-pw">Confirm with your password</label>
+            <input id="del-pw" type="password" className="input" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} />
+            <span className="hint">Signed up with Google? Leave this blank.</span></div>
+          <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setConfirming(false)}>Cancel</button>
+            <button className="btn btn-danger" disabled={busy}>Delete forever</button>
+          </div>
+        </form>
+      </dialog>
     </>
   );
 }

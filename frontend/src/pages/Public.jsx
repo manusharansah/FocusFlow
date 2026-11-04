@@ -79,9 +79,9 @@ export function Pricing() {
       <h2>Simple, transparent pricing</h2>
       <p className="sub">Start free. Upgrade when you are ready. Cancel anytime.</p>
       {catalog && catalog.length > 1 && (
-        <div className="cycle"><div className="tabs" role="tablist" aria-label="Billing period">
-          <button role="tab" aria-selected={cycle === 'monthly'} onClick={() => setCycle('monthly')}>Monthly</button>
-          <button role="tab" aria-selected={cycle === 'yearly'} onClick={() => setCycle('yearly')}>Yearly{saving > 0 ? ` (save ${saving}%)` : ''}</button>
+        <div className="cycle"><div className="tabs" role="group" aria-label="Billing period">
+          <button type="button" aria-pressed={cycle === 'monthly'} onClick={() => setCycle('monthly')}>Monthly</button>
+          <button type="button" aria-pressed={cycle === 'yearly'} onClick={() => setCycle('yearly')}>Yearly{saving > 0 ? ` (save ${saving}%)` : ''}</button>
         </div></div>
       )}
       {error && <div className="alert alert-error" style={{ maxWidth: 480, margin: '20px auto 0' }} role="alert">{error}</div>}

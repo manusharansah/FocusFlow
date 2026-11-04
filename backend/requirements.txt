@@ -13,3 +13,4 @@ psycopg[binary]>=3.2
 whitenoise>=6.8
 gunicorn>=23
 sentry-sdk>=2.0   # optional, only imported when SENTRY_DSN is set
+redis>=5

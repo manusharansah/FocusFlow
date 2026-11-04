@@ -7,6 +7,7 @@ const PRESETS = [15, 25, 45, 60];
 export default function FocusTimer({ tasks = [] }) {
   const [minutes, setMinutes] = useState(25);
   const [endsAt, setEndsAt] = useState(null); // timestamp: robust to tab throttling
+  const [paused, setPaused] = useState(false);
   const [left, setLeft] = useState(25 * 60);
   const [taskId, setTaskId] = useState('');
   const [message, setMessage] = useState(null);
@@ -38,21 +39,21 @@ export default function FocusTimer({ tasks = [] }) {
   useEffect(() => {
     if (!running) return undefined;
     const id = setInterval(() => {
-      const remaining = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
       setLeft(remaining);
-      if (remaining === 0) { setEndsAt(null); setLeft(minutes * 60); finish(true, minutes); }
+      if (remaining === 0) { setEndsAt(null); setPaused(false); setLeft(minutes * 60); finish(true, minutes); }
     }, 250);
     return () => clearInterval(id);
   }, [running, endsAt, minutes, finish]);
 
-  const start = () => { setMessage(null); setEndsAt(Date.now() + left * 1000); };
-  const pause = () => { setLeft(Math.max(0, Math.round((endsAt - Date.now()) / 1000))); setEndsAt(null); };
+  const start = () => { setMessage(null); setPaused(false); setEndsAt(Date.now() + left * 1000); };
+  const pause = () => { setLeft(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))); setEndsAt(null); setPaused(true); };
   const reset = () => {
-    const elapsed = Math.floor((minutes * 60 - (running ? Math.round((endsAt - Date.now()) / 1000) : left)) / 60);
-    setEndsAt(null); setLeft(minutes * 60);
+    const elapsed = Math.floor((minutes * 60 - (running ? Math.ceil((endsAt - Date.now()) / 1000) : left)) / 60);
+    setEndsAt(null); setPaused(false); setLeft(minutes * 60);
     if (elapsed >= 1) finish(false, elapsed);
   };
-  const choose = (m) => { if (!running) { setMinutes(m); setLeft(m * 60); } };
+  const choose = (m) => { if (!running) { setMinutes(m); setLeft(m * 60); setPaused(false); } };
 
   const mm = String(Math.floor(left / 60)).padStart(2, '0');
   const ss = String(left % 60).padStart(2, '0');
@@ -87,8 +88,8 @@ export default function FocusTimer({ tasks = [] }) {
         <div className="timer-actions">
           {running
             ? <button className="btn btn-lg" onClick={pause}><Icon name="pause" />Pause</button>
-            : <button className="btn btn-lg" onClick={start}><Icon name="play" />{left === minutes * 60 ? 'Start focus' : 'Resume'}</button>}
-          <button className="btn btn-secondary btn-lg" onClick={reset} disabled={!running && left === minutes * 60}><Icon name="reset" />Stop</button>
+            : <button className="btn btn-lg" onClick={start}><Icon name="play" />{paused ? 'Resume' : 'Start focus'}</button>}
+          <button className="btn btn-secondary btn-lg" onClick={reset} disabled={!running && !paused}><Icon name="reset" />Stop</button>
         </div>
         {message && <div className={`alert alert-${message.kind}`} role="status">{message.text}</div>}
       </div>

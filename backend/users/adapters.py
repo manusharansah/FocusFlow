@@ -1,4 +1,7 @@
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.core.exceptions import ImmediateHttpResponse
+from django.conf import settings
+from django.http import HttpResponseRedirect
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 
 
@@ -20,3 +23,7 @@ class SocialAdapter(DefaultSocialAccountAdapter):
         if email_addresses and any(e.verified for e in email_addresses):
             user.email_verified = True
         return user
+
+    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+        # Send users back to the SPA instead of rendering allauth's HTML error page.
+        raise ImmediateHttpResponse(HttpResponseRedirect(f'{settings.FRONTEND_URL}/login?error=oauth'))

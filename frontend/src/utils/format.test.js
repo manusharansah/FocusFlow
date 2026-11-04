@@ -20,5 +20,7 @@ describe('format helpers', () => {
   it('formats money from minor units', () => {
     expect(formatMoney(999, 'usd')).toContain('9.99');
     expect(formatMoney(9900, 'usd')).toContain('99');
+    expect(formatMoney(500, 'jpy')).toContain('500'); // zero-decimal currency
+    expect(formatMoney(500, 'jpy')).not.toContain('5.00');
   });
 });

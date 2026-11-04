@@ -1,5 +1,6 @@
 # Production-like stack: docker compose up --build
 # Put a TLS terminator (Caddy, Traefik, cloud LB) in front of `web` and set X-Forwarded-Proto.
+# For plain-http local testing set SECURE_SSL_REDIRECT=False in backend/.env.
 services:
   db:
     image: postgres:17-alpine
@@ -8,19 +9,51 @@ services:
       POSTGRES_USER: focusflow
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U focusflow -d focusflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  migrate:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgres://focusflow:${POSTGRES_PASSWORD}@db:5432/focusflow
+    command: python manage.py migrate --noinput
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
   backend:
     build: ./backend
     env_file: ./backend/.env
     environment:
       DATABASE_URL: postgres://focusflow:${POSTGRES_PASSWORD}@db:5432/focusflow
-    depends_on: [db]
-    command: sh -c "python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
+      REDIS_URL: redis://redis:6379/1
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 30 --max-requests 1000 --max-requests-jitter 100 --worker-tmp-dir /dev/shm --access-logfile -
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://localhost:8000/api/health/', headers={'X-Forwarded-Proto': 'https'}), timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
   web:
     build: ./frontend
     ports: ["8080:80"]
-    depends_on: [backend]
+    depends_on:
+      backend: { condition: service_healthy }
     restart: unless-stopped
 volumes:
   pgdata:

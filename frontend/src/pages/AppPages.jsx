@@ -49,7 +49,7 @@ function QuickAdd({ onCreate }) {
 }
 
 export function Tasks() {
-  const { tasks, loading, error, create, update, remove } = useTasks();
+  const { tasks, loading, error, reload, create, update, remove } = useTasks();
   const [view, setView] = useState('list');
   const [query, setQuery] = useState('');
   const [priority, setPriority] = useState('all');
@@ -72,9 +72,9 @@ export function Tasks() {
       <div className="page-head"><div><h1>Tasks</h1><p>Plan, prioritise and track your work.</p></div></div>
       <QuickAdd onCreate={create} />
       <div className="toolbar">
-        <div className="tabs" role="tablist" aria-label="View">
-          <button role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}><Icon name="list" size={16} />List</button>
-          <button role="tab" aria-selected={view === 'board'} onClick={() => setView('board')}><Icon name="board" size={16} />Board</button>
+        <div className="tabs" role="group" aria-label="View">
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}><Icon name="list" size={16} />List</button>
+          <button type="button" aria-pressed={view === 'board'} onClick={() => setView('board')}><Icon name="board" size={16} />Board</button>
         </div>
         <div className="search">
           <Icon name="search" size={16} />
@@ -86,8 +86,12 @@ export function Tasks() {
           <option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
         </select>
       </div>
-      {(error || actionError) && <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">{error || actionError}</div>}
-      {tasks.length === 0
+      {(error || actionError) && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">
+          {error || actionError}{error && <> <button type="button" className="link-btn" onClick={reload}>Retry</button></>}
+        </div>
+      )}
+      {tasks.length === 0 && error ? null : tasks.length === 0
         ? <div className="card empty"><h3>No tasks yet</h3><p>Add your first task above to get started.</p></div>
         : view === 'list'
           ? <TaskList tasks={visible} onToggle={toggle} onDelete={del} />
@@ -115,7 +119,7 @@ export function Overview() {
         <div><h1>{greeting}, {user.username}</h1><p>Here is where things stand today.</p></div>
         <Link to="/app/tasks" className="btn"><Icon name="plus" />New task</Link>
       </div>
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">{error}</div>}
       <div className="stats">
         <div className="card stat"><div className="label">Open tasks</div><div className="value">{tasks.length - done}</div></div>
         <div className="card stat"><div className="label">In progress</div><div className="value">{active}</div></div>
@@ -152,7 +156,7 @@ export function Overview() {
 
 export function Focus() {
   const { user } = useAuth();
-  const { tasks } = useTasks();
+  const { tasks } = useTasks({ enabled: user.is_premium });
   return (
     <>
       <div className="page-head"><div><h1>Focus timer</h1><p>Work in distraction-free sessions and log your time.</p></div></div>

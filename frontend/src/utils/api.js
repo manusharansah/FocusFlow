@@ -10,12 +10,18 @@ export const setAccessToken = (t) => { accessToken = t; };
 const api = axios.create({ baseURL: API_URL, withCredentials: true, timeout: 20000 });
 
 let refreshing = null;
+const doRefresh = () => axios
+  .post(`${API_URL}/users/token/refresh/`, null, { withCredentials: true, timeout: 20000 })
+  .then((r) => { accessToken = r.data.access; return r.data; });
+
+// Refresh tokens rotate and are single-use. Serialise refreshes inside a tab (shared promise) AND across tabs
+// (Web Locks) so two tabs never present the same token at once.
 export function refreshSession() {
   if (!refreshing) {
-    refreshing = axios
-      .post(`${API_URL}/users/token/refresh/`, null, { withCredentials: true, timeout: 20000 })
-      .then((r) => { accessToken = r.data.access; return r.data; })
-      .finally(() => { refreshing = null; });
+    const run = typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('focusflow-refresh', doRefresh)
+      : doRefresh();
+    refreshing = run.finally(() => { refreshing = null; });
   }
   return refreshing;
 }
@@ -46,6 +52,8 @@ api.interceptors.response.use(
 );
 
 /** Turn any API error into a short, user-safe message. */
+export function errorCode(error) { return error?.response?.data?.code; }
+
 export function errorMessage(error, fallback = 'Something went wrong. Please try again.') {
   const data = error?.response?.data;
   if (error?.response?.status === 429) return 'Too many attempts. Please wait a moment and try again.';

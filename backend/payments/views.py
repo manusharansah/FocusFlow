@@ -39,8 +39,9 @@ def create_checkout_session(request):
     user = request.user
     if not user.email_verified:
         return Response({'detail': 'Please verify your email address before upgrading.'}, status=status.HTTP_403_FORBIDDEN)
-    if user.is_premium:
-        return Response({'detail': 'You already have an active subscription.'}, status=status.HTTP_409_CONFLICT)
+    if user.is_premium or user.subscription_status in ('past_due', 'unpaid', 'incomplete'):
+        return Response({'detail': 'You already have a subscription. Manage it from Account > Manage billing.'},
+                        status=status.HTTP_409_CONFLICT)
     plan = request.data.get('plan', 'monthly')
     if plan not in services.PLANS or not settings.STRIPE_PRICE_IDS.get(plan):
         return Response({'detail': 'Unknown plan.'}, status=status.HTTP_400_BAD_REQUEST)

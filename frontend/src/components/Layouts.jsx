@@ -1,13 +1,36 @@
-import React, { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Icon, { BrandMark } from './Icon';
 
+const TITLES = {
+  '/': 'FocusFlow', '/pricing': 'Pricing', '/login': 'Sign in', '/register': 'Create account',
+  '/privacy': 'Privacy Policy', '/terms': 'Terms of Service', '/app': 'Overview', '/app/tasks': 'Tasks',
+  '/app/focus': 'Focus timer', '/app/insights': 'Insights', '/app/account': 'Account',
+};
+
+/** On route change: update the document title and move focus to <main> so screen-reader and keyboard users land on new content. */
+function useRouteAnnouncer(mainRef) {
+  const { pathname } = useLocation();
+  const first = useRef(true);
+  useEffect(() => {
+    const name = TITLES[pathname];
+    document.title = name && name !== 'FocusFlow' ? `${name} | FocusFlow` : 'FocusFlow';
+    if (first.current) { first.current = false; return; }
+    mainRef.current?.focus({ preventScroll: false });
+  }, [pathname, mainRef]);
+}
+
+const SkipLink = () => <a href="#main" className="skip-link">Skip to content</a>;
+
 export function PublicLayout() {
   const { user } = useAuth();
+  const mainRef = useRef(null);
+  useRouteAnnouncer(mainRef);
   return (
     <>
+      <SkipLink />
       <header className="site-nav">
         <div className="site-nav-inner">
           <Link to="/" className="brand"><BrandMark />FocusFlow</Link>
@@ -24,12 +47,11 @@ export function PublicLayout() {
           </nav>
         </div>
       </header>
-      <main><Outlet /></main>
+      <main id="main" tabIndex={-1} ref={mainRef} className="focus-target"><Outlet /></main>
       <footer className="footer">
         <div className="footer-inner">
           <span>&copy; {new Date().getFullYear()} FocusFlow</span>
           <nav aria-label="Legal">
-            <Link to="/pricing">Pricing</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
           </nav>
@@ -51,16 +73,28 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const mainRef = useRef(null);
+  const menuBtn = useRef(null);
+  useRouteAnnouncer(mainRef);
+
+  // Close the mobile drawer with Escape and give focus back to the menu button.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); menuBtn.current?.focus(); } };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const signOut = async () => { await logout(); navigate('/login', { replace: true }); };
 
   return (
     <div className="shell">
-      <aside className={`sidebar${open ? ' open' : ''}`} aria-label="Sidebar">
+      <SkipLink />
+      <aside id="sidebar" className={`sidebar${open ? ' open' : ''}`} aria-label="Sidebar">
         <Link to="/app" className="brand"><BrandMark />FocusFlow</Link>
         <div>
           <div className="side-label">Workspace</div>
-          <nav className="side-nav" onClick={() => setOpen(false)}>
+          <nav className="side-nav" aria-label="Workspace" onClick={() => setOpen(false)}>
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
                 <Icon name={n.icon} />{n.label}
@@ -83,34 +117,33 @@ export function AppLayout() {
           </div>
         </div>
       </aside>
-      <div className={`scrim${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
+      <div className={`scrim${open ? ' open' : ''}`} onClick={() => setOpen(false)} aria-hidden="true" />
       <div className="main">
         <div className="topbar">
-          <button className="icon-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          <Link to="/app" className="brand"><BrandMark />FocusFlow</Link>
-          <span style={{ width: 34 }} />
+          <button ref={menuBtn} className="icon-btn" onClick={() => setOpen(true)} aria-label="Open menu"
+            aria-expanded={open} aria-controls="sidebar"><Icon name="menu" /></button>
+          <span className="topbar-title">FocusFlow</span>
         </div>
-        <div className="content">
-          {!user.email_verified && <VerifyBanner />}
+        <main id="main" tabIndex={-1} ref={mainRef} className="content focus-target">
+          {!user.email_verified && <VerifyBanner email={user.email} />}
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );
 }
 
-function VerifyBanner() {
+function VerifyBanner({ email }) {
   const [state, setState] = useState('idle');
   const resend = async () => {
     setState('sending');
-    try { await api.post('/users/resend-verification/'); setState('sent'); } catch { setState('error'); }
+    try { await api.post('/users/resend-verification/', { email }); setState('sent'); } catch { setState('error'); }
   };
   return (
     <div className="alert alert-info" style={{ marginBottom: 20 }} role="status">
       Please verify your email address. We sent you a link when you signed up.{' '}
       {state === 'sent' ? <strong>New link sent.</strong> : (
-        <button className="btn btn-ghost" style={{ height: 'auto', padding: 0, color: 'inherit', textDecoration: 'underline' }}
-          onClick={resend} disabled={state === 'sending'}>Resend email</button>
+        <button type="button" className="link-btn" onClick={resend} disabled={state === 'sending'}>Resend email</button>
       )}
       {state === 'error' && ' Could not send. Try again later.'}
     </div>

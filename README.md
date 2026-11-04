@@ -59,6 +59,10 @@ The button only appears when both are set.
 
 ## Tests and checks
 
+Smoke test (any environment, 42 checks across public pages, auth, tasks, board, billing gates, a11y, mobile):
+`cd frontend && BASE_URL=https://your-site SMOKE_USER=... SMOKE_PASS=... SMOKE_PREMIUM_USER=... npm run smoke`
+(first time: `npx playwright install chromium`; use `CHECK_HEADERS=1` against the production edge).
+
 ```bash
 cd backend  && DEBUG=True python manage.py test
 cd frontend && npm run lint && npm test && npm run build

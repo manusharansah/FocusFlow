@@ -76,3 +76,17 @@ class TaskTests(TestCase):
         self.assertEqual(self.c.get('/api/tasks/?search=alp').data['count'], 1)
         self.assertEqual(self.c.get('/api/tasks/?priority=high').data['count'], 1)
         self.assertEqual(self.c.get('/api/tasks/?status=in_progress').data['count'], 1)
+
+    def test_focus_session_task_error_is_uniform(self):
+        p = APIClient(); p.force_authenticate(self.b)
+        foreign = self.c.post('/api/tasks/', {'title': 't'}, format='json').data['id']
+        a = p.post('/api/tasks/focus-session/', {'duration_minutes': 25, 'task': foreign}, format='json')
+        b = p.post('/api/tasks/focus-session/', {'duration_minutes': 25, 'task': 999999}, format='json')
+        self.assertEqual((a.status_code, a.data), (b.status_code, b.data))
+
+    def test_page_size_param_is_capped(self):
+        p = APIClient(); p.force_authenticate(self.b)
+        for i in range(3):
+            p.post('/api/tasks/', {'title': f't{i}'}, format='json')
+        self.assertEqual(len(p.get('/api/tasks/?page_size=2').data['results']), 2)
+        self.assertEqual(len(p.get('/api/tasks/?page_size=100000').data['results']), 3)

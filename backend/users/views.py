@@ -2,7 +2,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import authenticate, password_validation
-from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.middleware.csrf import get_token
@@ -13,21 +13,32 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from payments import services as billing
+from django.views.decorators.http import require_GET
 from tasks.models import FocusSession, Task
 
 from .cookies import clear_refresh_cookie, set_refresh_cookie
+from .tokens import email_verification_token, password_reset_token
 from .emails import send_password_reset_email, send_verification_email
 from .models import User
-from .serializers import (DeleteAccountSerializer, PasswordResetConfirmSerializer,
+from .serializers import (DeleteAccountSerializer, EmailOnlySerializer, PasswordResetConfirmSerializer,
                           PasswordResetRequestSerializer, ProfileUpdateSerializer,
                           RegisterSerializer, UserSerializer, VerifyEmailSerializer)
 from .throttles import AuthRateThrottle, RefreshRateThrottle, SensitiveRateThrottle
 
 log = logging.getLogger(__name__)
 GENERIC_LOGIN_ERROR = 'Invalid email or password.'
+LOGIN_ATTEMPTS = 8          # per account, per window (defends against distributed guessing)
+LOGIN_WINDOW = 15 * 60
+
+
+def revoke_all_sessions(user):
+    """Blacklist every outstanding refresh token for the user."""
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
 
 
 def _tokens_response(user, status_code=status.HTTP_200_OK):
@@ -69,9 +80,19 @@ def register(request):
 def login(request):
     email = str(request.data.get('email', '')).strip().lower()
     password = request.data.get('password', '')
+    key = f'login-fail:{email}'
+    if cache.get(key, 0) >= LOGIN_ATTEMPTS:
+        return Response({'detail': 'Too many attempts. Please wait a few minutes and try again.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
     user = authenticate(request, username=email, password=password) if email and isinstance(password, str) else None
     if user is None or not user.is_active:
+        cache.set(key, cache.get(key, 0) + 1, LOGIN_WINDOW)
         return Response({'detail': GENERIC_LOGIN_ERROR}, status=status.HTTP_401_UNAUTHORIZED)
+    if not user.email_verified:
+        # Closes the "pre-registered account" takeover: nobody can use an address they have not proven.
+        return Response({'detail': 'Please verify your email address first. Check your inbox for the link.',
+                         'code': 'email_not_verified'}, status=status.HTTP_403_FORBIDDEN)
+    cache.delete(key)
     return _tokens_response(user)
 
 
@@ -82,14 +103,34 @@ def token_refresh(request):
     raw = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
     if not raw:
         return Response({'detail': 'Not authenticated.'}, status=status.HTTP_401_UNAUTHORIZED)
-    try:
-        old = RefreshToken(raw)
-        user = User.objects.get(pk=old['user_id'], is_active=True)
-        old.blacklist()  # rotation: each refresh token is single-use
-    except (TokenError, User.DoesNotExist, KeyError):
+
+    def reject():
         response = Response({'detail': 'Session expired.'}, status=status.HTTP_401_UNAUTHORIZED)
         clear_refresh_cookie(response)
         return response
+
+    try:
+        with transaction.atomic():
+            try:
+                old = RefreshToken(raw)  # verifies signature, expiry and blacklist
+            except TokenError:
+                # A syntactically valid but already-used token means theft or replay: revoke the whole family.
+                try:
+                    from rest_framework_simplejwt.tokens import UntypedToken
+                    claims = UntypedToken(raw, verify=False)
+                    owner = User.objects.filter(pk=claims['user_id']).first()
+                    if owner and BlacklistedToken.objects.filter(token__jti=claims['jti']).exists():
+                        revoke_all_sessions(owner)
+                except Exception:
+                    pass
+                return reject()
+            outstanding = OutstandingToken.objects.select_for_update().filter(jti=old['jti']).first()
+            if outstanding is None or BlacklistedToken.objects.filter(token=outstanding).exists():
+                return reject()
+            user = User.objects.get(pk=old['user_id'], is_active=True)
+            old.blacklist()
+    except (User.DoesNotExist, KeyError):
+        return reject()
     return _tokens_response(user)
 
 
@@ -107,18 +148,19 @@ def logout(request):
     return response
 
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
+@require_GET
 def oauth_complete(request):
-    """Bridge after Google sign-in: turn the allauth session into our refresh cookie."""
+    """Bridge after Google sign-in: turn the allauth session into our refresh cookie.
+
+    Deliberately a plain Django view (not DRF): it must read the *session* user that allauth created.
+    """
     from django.contrib.auth import logout as django_logout
-    target = f'{settings.FRONTEND_URL}/auth/callback'
     user = request.user
-    if not user.is_authenticated:
+    if not user.is_authenticated or not user.is_active:
         return HttpResponseRedirect(f'{settings.FRONTEND_URL}/login?error=oauth')
     refresh = RefreshToken.for_user(user)
-    django_logout(request)  # session was only needed for this redirect
-    response = HttpResponseRedirect(target)
+    django_logout(request)  # the session was only needed for this redirect
+    response = HttpResponseRedirect(f'{settings.FRONTEND_URL}/auth/callback')
     set_refresh_cookie(response, refresh)
     return response
 
@@ -138,7 +180,9 @@ def profile(request):
     serializer.is_valid(raise_exception=True)
     if user.has_usable_password() and not user.check_password(serializer.validated_data.get('password', '')):
         return Response({'detail': 'Password is incorrect.'}, status=status.HTTP_403_FORBIDDEN)
-    billing.cancel_for_deleted_user(user)
+    if not billing.cancel_for_deleted_user(user):
+        return Response({'detail': 'We could not cancel your subscription right now. Please try again shortly or contact support.'},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE)
     user.delete()
     response = Response(status=status.HTTP_204_NO_CONTENT)
     clear_refresh_cookie(response)
@@ -161,11 +205,23 @@ def export_data(request):
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 @throttle_classes([SensitiveRateThrottle])
 def resend_verification(request):
-    if not request.user.email_verified:
-        send_verification_email(request.user)
-    return Response({'detail': 'If your email is not yet verified, a new link has been sent.'})
+    serializer = EmailOnlySerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    email = serializer.validated_data['email'].lower()
+    # Per-address cap so one mailbox cannot be bombed from many IPs.
+    key = f'resend-verify:{email}'
+    if cache.get(key, 0) < 3:
+        cache.set(key, cache.get(key, 0) + 1, 3600)
+        user = User.objects.filter(email__iexact=email, is_active=True, email_verified=False).first()
+        if user:
+            try:
+                send_verification_email(user)
+            except Exception:
+                log.exception('Could not send verification e-mail')
+    return Response({'detail': 'If that address is registered and unverified, a new link has been sent.'})
 
 
 def _user_from_uid(uid):
@@ -182,7 +238,7 @@ def verify_email(request):
     serializer = VerifyEmailSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     user = _user_from_uid(serializer.validated_data['uid'])
-    if user is None or not default_token_generator.check_token(user, serializer.validated_data['token']):
+    if user is None or not email_verification_token.check_token(user, serializer.validated_data['token']):
         return Response({'detail': 'This link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
     user.email_verified = True
     user.save(update_fields=['email_verified'])
@@ -213,7 +269,7 @@ def password_reset_confirm(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
     user = _user_from_uid(data['uid'])
-    if user is None or not default_token_generator.check_token(user, data['token']):
+    if user is None or not user.has_usable_password() or not password_reset_token.check_token(user, data['token']):
         return Response({'detail': 'This link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         password_validation.validate_password(data['password'], user)
@@ -222,4 +278,5 @@ def password_reset_confirm(request):
     user.set_password(data['password'])
     user.email_verified = True  # proved control of the mailbox
     user.save()  # password change also invalidates the token
+    revoke_all_sessions(user)   # a reset must end every existing session
     return Response({'detail': 'Password updated. You can now sign in.'})

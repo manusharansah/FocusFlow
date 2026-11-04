@@ -27,6 +27,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(max_length=254)  # no UniqueValidator: duplicates are handled silently in the view
     password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
 
     class Meta:
@@ -50,6 +51,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         except Exception as exc:  # DjangoValidationError
             raise serializers.ValidationError({'password': list(getattr(exc, 'messages', [str(exc)]))})
         return attrs
+
+
+class EmailOnlySerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
