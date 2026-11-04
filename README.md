@@ -1,150 +1,80 @@
-# 🎯 Smart Task & Focus Manager
+# FocusFlow
 
-A full-stack SaaS application for task management and productivity tracking with subscription-based premium features.
+Task management with a focus timer and analytics. Django REST API + React (Vite) SPA, Stripe subscriptions, Google sign-in.
 
-## 🚀 Features
+| | Free | Premium |
+|---|---|---|
+| Tasks | up to 10 | unlimited |
+| List and board views, basic insights | yes | yes |
+| Focus timer + session history | - | yes |
+| Advanced insights (focus trends) | - | yes |
 
-### Core Features
-- ✅ **User Authentication** - JWT-based secure login/registration
-- ✅ **Task Management** - Create, update, delete tasks with priorities
-- ✅ **Subscription System** - Stripe payment integration (test mode)
-- ✅ **Analytics Dashboard** - Productivity insights with charts
+## Repository layout
 
-### Premium Features (Paid)
-- ⏱️ **Focus Timer** - Pomodoro-style focus sessions
-- 📊 **Advanced Analytics** - Focus time tracking
-- ∞ **Unlimited Tasks** - No limits on task creation
-
-### Free Tier Limitations
-- 10 tasks maximum
-- No focus timer
-- Basic analytics only
-
-## 🛠️ Tech Stack
-
-### Backend
-- **Django** - Web framework
-- **Django REST Framework** - API development
-- **SQLite** - Database (can switch to PostgreSQL)
-- **Stripe** - Payment processing
-
-### Frontend
-- **React** - UI library
-- **Axios** - HTTP client
-- **Recharts** - Data visualization
-- **React Router** - Navigation
-
-## 📦 Installation
-
-### Prerequisites
-- Python 3.8+
-- Node.js 14+
-- pip
-- npm
-
-### Backend Setup
-```bash
-# Navigate to backend
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install django djangorestframework djangorestframework-simplejwt django-cors-headers stripe python-decouple
-
-# Run migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Run server
-python manage.py runserver
+```
+backend/    Django 5.2 + DRF API (users, tasks, payments, analytics)
+frontend/   React 19 + Vite SPA
+docs/       SECURITY, DEPLOYMENT, API, ARCHITECTURE, ROADMAP
 ```
 
-### Frontend Setup
+## Local development
+
+Requirements: Python 3.12+, Node 20+.
+
 ```bash
-# Navigate to frontend
+# API  (http://localhost:8000)
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # set DEBUG=True and FRONTEND_URL/BACKEND_URL=http://localhost:3000 for local work
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+
+# SPA  (http://localhost:3000, proxies /api and /accounts to the API)
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server
 npm start
 ```
 
-## 🔑 Environment Variables
+Always open the app at `http://localhost:3000`. The dev server proxies the API, so the app and API share an
+origin exactly like production (the refresh-token cookie is first-party and HttpOnly).
 
-Create `.env` file in backend folder:
+Verification and password-reset emails print to the API console unless `EMAIL_HOST` is configured.
+
+### Stripe (test mode)
+
+1. Create two recurring Prices (monthly, yearly) and put their ids in `STRIPE_PRICE_ID_MONTHLY/YEARLY`.
+2. `stripe listen --forward-to localhost:8000/api/payments/webhook/` and copy the signing secret to `STRIPE_WEBHOOK_SECRET`.
+3. Pay with `4242 4242 4242 4242`, any future date, any CVC.
+
+The pricing page reads amounts and currency from Stripe, so what users see is what they are charged.
+Premium access is granted only by verified Stripe webhooks (or by re-reading the session from Stripe), never by client input.
+
+### Google sign-in
+
+Create an OAuth client in Google Cloud Console, authorised redirect URI
+`{your origin}/accounts/google/login/callback/`, then set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+The button only appears when both are set.
+
+## Tests and checks
+
+```bash
+cd backend  && DEBUG=True python manage.py test
+cd frontend && npm run lint && npm test && npm run build
 ```
-STRIPE_SECRET_KEY=sk_test_your_key_here
-STRIPE_PUBLISHABLE_KEY=pk_test_your_key_here
-```
 
-## 🧪 Testing Payments
+CI (`.github/workflows/ci.yml`) additionally runs `manage.py check --deploy`, `pip-audit`, `npm audit` and gitleaks.
 
-Use Stripe test card:
-- **Card Number**: 4242 4242 4242 4242
-- **Expiry**: Any future date
-- **CVC**: Any 3 digits
+## Production
 
-## 📸 Screenshots
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURITY.md).
+`docker compose up --build` gives a production-like stack (Postgres, gunicorn, nginx with CSP).
 
-[Add screenshots here after deployment]
+## Documentation
 
-## 🎓 Learning Outcomes
-
-This project demonstrates:
-- Full-stack development skills
-- RESTful API design
-- JWT authentication implementation
-- Payment gateway integration
-- Role-based access control
-- Data visualization
-- State management in React
-
-## 📝 API Endpoints
-
-### Authentication
-- `POST /api/users/register/` - User registration
-- `POST /api/users/login/` - User login
-- `GET /api/users/profile/` - Get user profile
-
-### Tasks
-- `GET /api/tasks/` - List user tasks
-- `POST /api/tasks/` - Create task
-- `PATCH /api/tasks/{id}/` - Update task
-- `DELETE /api/tasks/{id}/` - Delete task
-
-### Payments
-- `POST /api/payments/create-checkout/` - Create Stripe checkout
-- `POST /api/payments/verify-payment/` - Verify payment
-
-### Analytics
-- `GET /api/analytics/stats/` - Get user analytics
-
-## 🚀 Deployment
-
-### Backend (Heroku/Railway)
-1. Add `Procfile`
-2. Configure PostgreSQL
-3. Set environment variables
-4. Deploy
-
-### Frontend (Vercel/Netlify)
-1. Build: `npm run build`
-2. Deploy build folder
-3. Configure API URL
-
-## 👨‍💻 Author
-
-[Manu Sharan Sah]
-- GitHub: [@manusharan]
-- LinkedIn: [manusharansah]
-
-## 📄 License
-
-MIT License
+- [docs/API.md](docs/API.md) - endpoint reference
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how auth, billing and data fit together
+- [docs/SECURITY.md](docs/SECURITY.md) - threat model, controls, incident checklist
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - environment, domains, Stripe/Google/email setup, backups
+- [docs/ROADMAP.md](docs/ROADMAP.md) - services needed to compete internationally
