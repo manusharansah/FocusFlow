@@ -122,7 +122,7 @@ console.log(`\nSmoke test against ${BASE}\n`);
 // ---------- Free user journey ----------
 {
   const ctx = await newCtx(); const page = await ctx.newPage(); watch(page, 'free');
-  await check('Sign in lands on the workspace', async () => { await login(page, USER, PASS); await page.waitForSelector('.stats'); });
+  await check('Sign in lands on the workspace', async () => { await login(page, USER, PASS); await page.waitForSelector('.tiles'); });
   await check('Session cookie is HttpOnly and no token is in storage', async () => {
     const cookies = await ctx.cookies(); const refresh = cookies.find((c) => c.name === 'ff_refresh');
     assert(refresh?.httpOnly, 'refresh cookie missing or not HttpOnly');
@@ -136,7 +136,14 @@ console.log(`\nSmoke test against ${BASE}\n`);
       await page.evaluate(async ([id, tk]) => fetch(`/api/tasks/${id}/`, { method: 'DELETE', headers: { Authorization: `Bearer ${tk}` } }), [t.id, tok]);
   };
   await cleanup();
-  await check('Overview shows stats and plan meter', async () => { await page.goto(`${BASE}/app`); await page.waitForSelector('.stats'); await page.waitForSelector('.meter'); });
+  await check('Overview shows stats and plan meter', async () => { await page.goto(`${BASE}/app`); await page.waitForSelector('.tiles'); await page.waitForSelector('.meter'); await page.waitForSelector('.radial'); });
+  await check('Top-bar search jumps to Tasks filtered by the query', async () => {
+    await page.goto(`${BASE}/app`); await page.waitForSelector('#global-search');
+    await page.fill('#global-search', 'zzz-nothing-matches'); await page.keyboard.press('Enter');
+    await page.waitForURL('**/app/tasks?q=zzz-nothing-matches'); await page.waitForSelector('text=No tasks match');
+    await page.goto(`${BASE}/app`); await page.waitForSelector('#global-search');
+    await page.keyboard.press('/'); assert(await page.evaluate(() => document.activeElement?.id) === 'global-search', '"/" did not focus search');
+  });
   await check('Create a task (UI) and see it in the list', async () => {
     await page.goto(`${BASE}/app/tasks`); await page.waitForSelector('.quick-add');
     await page.fill('#new-title', 'smoke-alpha'); await page.selectOption('#new-priority', 'high'); await page.click('button:has-text("Add task")');
@@ -144,8 +151,10 @@ console.log(`\nSmoke test against ${BASE}\n`);
   });
   await check('Complete and reopen a task via checkbox', async () => {
     const cb = page.getByRole('checkbox', { name: 'smoke-alpha' });
-    await cb.click(); await page.waitForFunction(() => document.querySelector('.row.done .title')?.textContent === 'smoke-alpha');
-    await cb.click(); await page.waitForFunction(() => !document.querySelector('.row.done'));
+    const isDone = () => page.evaluate(() => [...document.querySelectorAll('.row.done .title')].some((e) => e.textContent === 'smoke-alpha'));
+    await cb.click(); await page.waitForFunction(() => [...document.querySelectorAll('.row.done .title')].some((e) => e.textContent === 'smoke-alpha'));
+    assert(await isDone(), 'task not marked done');
+    await cb.click(); await page.waitForFunction(() => ![...document.querySelectorAll('.row.done .title')].some((e) => e.textContent === 'smoke-alpha'));
   });
   await check('Search and priority filter narrow the list', async () => {
     await page.fill('#task-search', 'zzz-no-match'); await page.waitForSelector('text=No tasks match');
@@ -154,11 +163,13 @@ console.log(`\nSmoke test against ${BASE}\n`);
     await page.selectOption('#task-prio', 'all'); await page.fill('#task-search', '');
   });
   await check('Board: drag a card to Done and persist after reload', async () => {
+    await page.setViewportSize({ width: 1280, height: 1800 }); // Playwright cannot auto-scroll mid-drag; tall page keeps source and target visible
     await page.click('button:has-text("Board")'); await page.waitForSelector('.board');
     await page.locator('.tcard', { hasText: 'smoke-alpha' }).dragTo(page.locator('section.column[aria-label="Done"]'));
-    await page.waitForFunction(() => document.querySelector('section.column[aria-label="Done"] .tcard'));
+    await page.waitForSelector('section.column[aria-label="Done"] .tcard:has-text("smoke-alpha")');
     await page.reload(); await page.click('button:has-text("Board")');
     await page.waitForSelector('section.column[aria-label="Done"] .tcard:has-text("smoke-alpha")');
+    await page.setViewportSize({ width: 1280, height: 800 });
   });
   await check('Board: keyboard-accessible move via select', async () => {
     await page.locator('.tcard', { hasText: 'smoke-alpha' }).locator('select').selectOption('in_progress');

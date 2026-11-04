@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { errorMessage } from '../utils/api';
+import api, { errorMessage } from '../utils/api';
 import { formatDue, isOverdue, parseDate } from '../utils/format';
 import Analytics from '../components/Analytics';
 import FocusTimer from '../components/FocusTimer';
@@ -11,6 +12,11 @@ import { TaskBoard, TaskList } from '../components/TaskViews';
 import useTasks from '../components/useTasks';
 
 const FREE_LIMIT = 10;
+
+function ChartTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return <div className="chart-tip"><strong>{label}</strong><div>{payload[0].name}: {payload[0].value}</div></div>;
+}
 
 function QuickAdd({ onCreate }) {
   const [title, setTitle] = useState('');
@@ -51,7 +57,8 @@ function QuickAdd({ onCreate }) {
 export function Tasks() {
   const { tasks, loading, error, reload, create, update, remove } = useTasks();
   const [view, setView] = useState('list');
-  const [query, setQuery] = useState('');
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState(params.get('q') || '');
   const [priority, setPriority] = useState('all');
   const [actionError, setActionError] = useState('');
 
@@ -100,49 +107,102 @@ export function Tasks() {
   );
 }
 
+function Tile({ tone, label, value, note, icon }) {
+  return (
+    <div className={`tile tile-${tone}`}>
+      <div className="tile-top"><span>{label}</span><Icon name={icon} size={20} /></div>
+      <div className="tile-value">{value}</div>
+      <div className="tile-note">{note}</div>
+    </div>
+  );
+}
+
+function Radial({ percent }) {
+  const R = 54; const C = 2 * Math.PI * R;
+  return (
+    <div className="radial" role="img" aria-label={`${percent} percent of tasks completed`}>
+      <svg viewBox="0 0 140 140" aria-hidden="true">
+        <defs><linearGradient id="rad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#6366f1" /><stop offset="1" stopColor="#8b5cf6" /></linearGradient></defs>
+        <circle cx="70" cy="70" r={R} fill="none" stroke="var(--surface-2)" strokeWidth="13" />
+        <circle cx="70" cy="70" r={R} fill="none" stroke="url(#rad)" strokeWidth="13" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - percent / 100)} transform="rotate(-90 70 70)" />
+      </svg>
+      <div className="radial-label"><strong>{percent}%</strong><span>done</span></div>
+    </div>
+  );
+}
+
 export function Overview() {
   const { user } = useAuth();
   const { tasks, loading, error } = useTasks();
+  const [trend, setTrend] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    api.get('/analytics/stats/').then((r) => alive && setTrend(r.data.daily_completion)).catch(() => {});
+    return () => { alive = false; };
+  }, [tasks.length]);
   if (loading) return <Loading />;
 
   const done = tasks.filter((t) => t.completed).length;
   const active = tasks.filter((t) => t.status === 'in_progress').length;
   const overdue = tasks.filter(isOverdue).length;
+  const open = tasks.length - done;
+  const dueToday = tasks.filter((t) => !t.completed && formatDue(t.due_date) === 'Today').length;
+  const percent = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   const upcoming = tasks.filter((t) => !t.completed)
     .sort((a, b) => (parseDate(a.due_date) || Infinity) - (parseDate(b.due_date) || Infinity)).slice(0, 6);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const summary = tasks.length === 0 ? 'Add your first task to get started.'
+    : `You have ${dueToday} ${dueToday === 1 ? 'task' : 'tasks'} due today${overdue ? ` and ${overdue} overdue` : ''}.`;
 
   return (
     <>
       <div className="page-head">
-        <div><h1>{greeting}, {user.username}</h1><p>Here is where things stand today.</p></div>
+        <div><h1>{greeting}, {user.username}</h1><p>{summary}</p></div>
         <Link to="/app/tasks" className="btn"><Icon name="plus" />New task</Link>
       </div>
       {error && <div className="alert alert-error" style={{ marginBottom: 16 }} role="alert">{error}</div>}
-      <div className="stats">
-        <div className="card stat"><div className="label">Open tasks</div><div className="value">{tasks.length - done}</div></div>
-        <div className="card stat"><div className="label">In progress</div><div className="value">{active}</div></div>
-        <div className="card stat"><div className="label">Completed</div><div className="value">{done}</div></div>
-        <div className="card stat"><div className="label">Overdue</div><div className="value" style={overdue ? { color: 'var(--danger)' } : undefined}>{overdue}</div></div>
+      <div className="tiles">
+        <Tile tone="indigo" icon="tasks" label="Open tasks" value={open} note={`${tasks.length} in total`} />
+        <Tile tone="sky" icon="activity" label="In progress" value={active} note="Being worked on now" />
+        <Tile tone="violet" icon="check" label="Completed" value={done} note={`${percent}% completion rate`} />
+        <Tile tone="coral" icon="alert" label="Overdue" value={overdue} note={overdue ? 'Needs attention' : 'Nothing overdue'} />
       </div>
-      {!user.is_premium && (
-        <div className="card card-pad" style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <h2 className="card-title">{tasks.length} of {FREE_LIMIT} free tasks used</h2>
-              <div className="meter" style={{ marginTop: 10 }}><span style={{ width: `${Math.min(100, (tasks.length / FREE_LIMIT) * 100)}%` }} /></div>
-            </div>
-            <Link to="/pricing" className="btn btn-secondary">Upgrade for unlimited</Link>
+      <div className="overview-grid">
+        <div className="card card-pad">
+          <h2 className="card-title">Completion trend</h2><p className="card-sub">Tasks completed in the last 7 days</p>
+          <div className="chart-box" style={{ height: 250 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
+                <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} /><stop offset="100%" stopColor="#6366f1" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="4 4" />
+                <XAxis dataKey="date" tick={{ fontSize: 13, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 13, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<ChartTip />} />
+                <Area type="monotone" dataKey="completed" name="Completed" stroke="var(--chart-1)" strokeWidth={3} fill="url(#area)" isAnimationActive={false} dot={{ r: 4, fill: 'var(--surface)', stroke: 'var(--chart-1)', strokeWidth: 2 }} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
-      )}
-      <div className="card card-pad">
+        <div className="card card-pad progress-card">
+          <h2 className="card-title">Overall progress</h2><p className="card-sub">{done} of {tasks.length} tasks completed</p>
+          <Radial percent={percent} />
+          {!user.is_premium && (
+            <div className="quota">
+              <div className="quota-row"><span>Free plan</span><span>{tasks.length} / {FREE_LIMIT} tasks</span></div>
+              <div className="meter"><span style={{ width: `${Math.min(100, (tasks.length / FREE_LIMIT) * 100)}%` }} /></div>
+              <Link to="/pricing" className="btn btn-secondary btn-block" style={{ marginTop: 14 }}>Upgrade for unlimited</Link>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="card card-pad" style={{ marginTop: 20 }}>
         <h2 className="card-title">Up next</h2>
         {upcoming.length === 0 ? <p className="empty">You are all caught up.</p> : (
           <ul style={{ marginTop: 8 }}>
             {upcoming.map((t) => (
-              <li key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+              <li key={t.id} className="next-row">
                 <span style={{ overflowWrap: 'anywhere' }}>{t.title}</span>
                 <span className={isOverdue(t) ? 'badge badge-overdue' : 'due'}>{formatDue(t.due_date) || 'No date'}</span>
               </li>

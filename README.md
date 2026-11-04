@@ -82,3 +82,10 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURIT
 - [docs/SECURITY.md](docs/SECURITY.md) - threat model, controls, incident checklist
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - environment, domains, Stripe/Google/email setup, backups
 - [docs/ROADMAP.md](docs/ROADMAP.md) - services needed to compete internationally
+
+## Design credits
+
+The UI is our own implementation. Its neutral colour scale, radius and dark-theme values follow
+[shadcn-admin](https://github.com/satnaing/shadcn-admin) (MIT, Copyright (c) 2024 Sat Naing); the KPI colour tiles and the
+greeting/radial/area-chart layout were inspired by the Skydash and Sneat admin template previews. Inter is bundled via
+`@fontsource-variable/inter` (SIL OFL) and served from our own origin, so the strict CSP needs no third-party hosts.

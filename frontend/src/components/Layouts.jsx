@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Icon, { BrandMark } from './Icon';
+import ThemeToggle from './ThemeToggle';
 
 const TITLES = {
   '/': 'FocusFlow', '/pricing': 'Pricing', '/login': 'Sign in', '/register': 'Create account',
@@ -36,11 +37,12 @@ export function PublicLayout() {
           <Link to="/" className="brand"><BrandMark />FocusFlow</Link>
           <nav className="nav-links" aria-label="Main">
             <Link to="/pricing" className="hide-sm">Pricing</Link>
+            <ThemeToggle />
             {user ? (
               <Link to="/app" className="btn">Open app</Link>
             ) : (
               <>
-                <Link to="/login">Sign in</Link>
+                <Link to="/login" className="hide-xs">Sign in</Link>
                 <Link to="/register" className="btn">Get started</Link>
               </>
             )}
@@ -75,6 +77,18 @@ export function AppLayout() {
   const navigate = useNavigate();
   const mainRef = useRef(null);
   const menuBtn = useRef(null);
+  const searchRef = useRef(null);
+  const [q, setQ] = useState('');
+  const onSearch = (e) => { e.preventDefault(); navigate(`/app/tasks${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); };
+  // Press / anywhere (outside inputs) to focus search.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target.tagName;
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); searchRef.current?.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   useRouteAnnouncer(mainRef);
 
   // Close the mobile drawer with Escape and give focus back to the menu button.
@@ -119,11 +133,18 @@ export function AppLayout() {
       </aside>
       <div className={`scrim${open ? ' open' : ''}`} onClick={() => setOpen(false)} aria-hidden="true" />
       <div className="main">
-        <div className="topbar">
-          <button ref={menuBtn} className="icon-btn" onClick={() => setOpen(true)} aria-label="Open menu"
+        <header className="topbar">
+          <button ref={menuBtn} className="icon-btn menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"
             aria-expanded={open} aria-controls="sidebar"><Icon name="menu" /></button>
-          <span className="topbar-title">FocusFlow</span>
-        </div>
+          <form className="top-search" role="search" onSubmit={onSearch}>
+            <Icon name="search" size={18} />
+            <label className="sr-only" htmlFor="global-search">Search tasks</label>
+            <input id="global-search" ref={searchRef} className="input" placeholder="Search tasks  ( / )" value={q}
+              maxLength={100} onChange={(e) => setQ(e.target.value)} />
+          </form>
+          <ThemeToggle />
+          <Link to="/app/account" className="avatar top-avatar" aria-label="Account" title={user.email}>{user.username?.[0]?.toUpperCase() || '?'}</Link>
+        </header>
         <main id="main" tabIndex={-1} ref={mainRef} className="content focus-target">
           {!user.email_verified && <VerifyBanner email={user.email} />}
           <Outlet />

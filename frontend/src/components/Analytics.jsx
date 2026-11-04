@@ -4,9 +4,15 @@ import { Link } from 'react-router-dom';
 import api, { errorMessage } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Loading from './Loading';
+import StatCard from './StatCard';
 
-const COLORS = { high: '#b91c1c', medium: '#b45309', low: '#15803d' };
-const AXIS = { fontSize: 12, fill: '#5b6475' };
+const COLORS = { high: 'var(--danger)', medium: 'var(--chart-3)', low: 'var(--chart-2)' };
+const AXIS = { fontSize: 13, fill: 'var(--muted)' };
+
+function Tip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return <div className="chart-tip"><strong>{label ?? payload[0].name}</strong><div>{payload[0].name}: {payload[0].value}</div></div>;
+}
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -30,13 +36,10 @@ export default function Analytics() {
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="stats">
-        <div className="card stat"><div className="label">Total tasks</div><div className="value">{stats.total_tasks}</div></div>
-        <div className="card stat"><div className="label">Completed</div><div className="value">{stats.completed_tasks}</div><div className="note">{rate}% completion rate</div></div>
-        <div className="card stat"><div className="label">Pending</div><div className="value">{stats.pending_tasks}</div></div>
-        {user.is_premium && (
-          <div className="card stat"><div className="label">Focus time</div><div className="value">{focus.total_focus_time || 0}<small style={{ fontSize: 14, fontWeight: 500 }}> min</small></div>
-            <div className="note">{focus.total_sessions || 0} sessions</div></div>
-        )}
+        <StatCard label="Total tasks" value={stats.total_tasks} icon="tasks" tone="indigo" />
+        <StatCard label="Completed" value={stats.completed_tasks} note={`${rate}% completion rate`} icon="check" tone="emerald" />
+        <StatCard label="Pending" value={stats.pending_tasks} icon="activity" tone="amber" />
+        {user.is_premium && <StatCard label="Focus time" value={focus.total_focus_time || 0} unit="min" note={`${focus.total_sessions || 0} sessions`} icon="timer" tone="sky" />}
       </div>
       <div className="grid-2">
         <div className="card card-pad">
@@ -44,11 +47,11 @@ export default function Analytics() {
           <div className="chart-box">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.daily_completion} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#e4e7ef" strokeDasharray="4 4" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="4 4" />
                 <XAxis dataKey="date" tick={AXIS} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} />
-                <Tooltip cursor={{ fill: '#f1f3f9' }} />
-                <Bar isAnimationActive={false} dataKey="completed" name="Completed" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<Tip />} />
+                <Bar isAnimationActive={false} dataKey="completed" name="Completed" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -61,9 +64,9 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie isAnimationActive={false} data={pie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
-                      {pie.map((p) => <Cell key={p.name} fill={COLORS[p.name]} />)}
+                      {pie.map((p) => <Cell key={p.name} fill={COLORS[p.name]} stroke="var(--surface)" strokeWidth={2} />)}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={<Tip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -80,11 +83,11 @@ export default function Analytics() {
           <div className="chart-box">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={focus.daily_focus} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#e4e7ef" strokeDasharray="4 4" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="4 4" />
                 <XAxis dataKey="date" tick={AXIS} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} />
-                <Tooltip cursor={{ fill: '#f1f3f9' }} />
-                <Bar isAnimationActive={false} dataKey="minutes" name="Minutes" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<Tip />} />
+                <Bar isAnimationActive={false} dataKey="minutes" name="Minutes" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

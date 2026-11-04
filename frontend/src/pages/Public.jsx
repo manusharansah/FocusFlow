@@ -13,32 +13,43 @@ const FEATURES = [
   { icon: 'shield', title: 'Your data stays yours', text: 'Export or delete everything from your account at any time.' },
 ];
 
+const FEATURE_TONES = ['t1', 't2', 't3', 't4'];
+
 export function Landing() {
+  const cols = [['To do', ['Draft project brief', 'Book design review'], 'High'], ['In progress', ['Prepare launch notes'], 'Medium'], ['Done', ['Set up workspace', 'Invite the team'], 'Low']];
+  const tone = { High: 'badge-high', Medium: 'badge-medium', Low: 'badge-low' };
   return (
     <>
       <section className="hero container">
-        <h1>Plan your work. Focus. Finish more.</h1>
-        <p className="lead">FocusFlow brings tasks, a focus timer and simple analytics into one calm workspace.</p>
+        <span className="eyebrow"><Icon name="sparkles" size={16} />Tasks, focus and insights in one place</span>
+        <h1>Plan your work. <span className="gradient-text">Focus deeply.</span> Finish more.</h1>
+        <p className="lead">FocusFlow brings tasks, a focus timer and simple analytics into one calm, fast workspace.</p>
         <div className="hero-cta">
           <Link to="/register" className="btn btn-lg">Start for free</Link>
           <Link to="/pricing" className="btn btn-secondary btn-lg">View pricing</Link>
         </div>
-        <div className="card preview" aria-hidden="true">
-          <div className="cols">
-            {[['To do', ['Draft project brief', 'Book design review']], ['In progress', ['Prepare launch notes']], ['Done', ['Set up workspace', 'Invite the team']]].map(([name, items]) => (
-              <div className="col" key={name}><h4>{name}</h4>
-                {items.map((i) => <div className="mini" key={i}>{i}<span><span className={`badge ${name === 'Done' ? 'badge-low' : name === 'To do' ? '' : 'badge-accent'}`}>{name}</span></span></div>)}
+        <div className="window preview" aria-hidden="true">
+          <div className="window-bar"><i /><i /><i /><span>focusflow / board</span></div>
+          <div className="window-body">
+            <div className="window-side"><b /><b /><b /><b /></div>
+            <div className="window-main">
+              <div className="cols">
+                {cols.map(([name, items, pr]) => (
+                  <div className="col" key={name}><h4><span className={`dot ${name === 'To do' ? 'todo' : name === 'Done' ? 'done' : 'in_progress'}`} />{name}</h4>
+                    {items.map((i) => <div className="mini" key={i}>{i}<span><span className={`badge ${tone[pr]}`}>{pr}</span></span></div>)}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </section>
       <section className="section container">
-        <h2>Everything you need, nothing you do not</h2>
+        <h2>Everything you need, <span className="gradient-text">nothing you do not</span></h2>
         <p className="sub">Start free with up to 10 tasks. Upgrade for unlimited tasks and the focus timer.</p>
         <div className="feature-grid">
-          {FEATURES.map((f) => (
-            <div className="card feature" key={f.title}><div className="ico"><Icon name={f.icon} /></div><h3>{f.title}</h3><p>{f.text}</p></div>
+          {FEATURES.map((f, i) => (
+            <div className="card feature" key={f.title}><div className={`ico ${FEATURE_TONES[i]}`}><Icon name={f.icon} size={22} /></div><h3>{f.title}</h3><p>{f.text}</p></div>
           ))}
         </div>
       </section>
@@ -93,6 +104,7 @@ export function Pricing() {
           {user ? <button className="btn btn-secondary" disabled>{user.is_premium ? 'Included' : 'Current plan'}</button> : <Link to="/register" className="btn btn-secondary">Get started</Link>}
         </div>
         <div className="card plan featured">
+          <span className="badge badge-accent tag"><Icon name="sparkles" size={14} />Most popular</span>
           <div><h3>Premium</h3><p className="card-sub">For people who ship</p></div>
           {catalog === null ? <Loading /> : plan
             ? <div className="amount">{formatMoney(plan.amount, plan.currency)}<small> / {plan.interval}</small></div>

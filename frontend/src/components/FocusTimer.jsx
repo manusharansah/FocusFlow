@@ -72,8 +72,9 @@ export default function FocusTimer({ tasks = [] }) {
         </div>
         <div className="ring">
           <svg viewBox="0 0 240 240" aria-hidden="true">
-            <circle cx="120" cy="120" r="108" fill="none" stroke="var(--surface-2)" strokeWidth="10" />
-            <circle cx="120" cy="120" r="108" fill="none" stroke="var(--accent)" strokeWidth="10" strokeLinecap="round"
+            <defs><linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#6366f1" /><stop offset="1" stopColor="#8b5cf6" /></linearGradient></defs>
+            <circle cx="120" cy="120" r="108" fill="none" stroke="var(--surface-2)" strokeWidth="11" />
+            <circle cx="120" cy="120" r="108" fill="none" stroke="url(#ring-grad)" strokeWidth="11" strokeLinecap="round"
               strokeDasharray={C} strokeDashoffset={C * (1 - progress)} />
           </svg>
           <div className="time" role="timer" aria-live="off">{mm}:{ss}</div>
