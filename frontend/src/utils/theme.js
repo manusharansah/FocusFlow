@@ -1,22 +1,19 @@
-// Theme = 'light' | 'dark' | null (follow the OS). Stored only as a per-device convenience.
+// Dark is the default. A visitor can switch to light; the choice is stored only on this device.
 const KEY = 'ff-theme';
 const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
 
-export function getTheme() { const t = read(); return t === 'light' || t === 'dark' ? t : null; }
+export function getTheme() { return read() === 'light' ? 'light' : 'dark'; }
 
 export function applyTheme(t) {
-  const el = document.documentElement;
-  if (t) el.setAttribute('data-theme', t); else el.removeAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', t);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#0b1120' : '#f6f5fd');
 }
 
 export function setTheme(t) {
-  try { if (t) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY); } catch { /* storage unavailable */ }
+  try { localStorage.setItem(KEY, t); } catch { /* storage unavailable: the choice lasts until reload */ }
   applyTheme(t);
 }
 
-export function isDark() {
-  const t = getTheme();
-  return t ? t === 'dark' : window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-}
+export const isDark = () => getTheme() === 'dark';
 
 export const initTheme = () => applyTheme(getTheme());

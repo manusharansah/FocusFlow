@@ -143,7 +143,7 @@ REST_FRAMEWORK = {
         'anon': '60/min',
         'user': '300/min',
         'auth': '20/min',          # per IP; brute force is also capped per account (users.views.LOGIN_ATTEMPTS)
-        'refresh': '60/min',       # session restore on page load
+        'refresh': '300/min',      # session restore on page load; needs a valid signed cookie, so not a guessing target
         'sensitive': '5/hour',     # password reset, verification e-mails
         'payments': '20/hour',
     },

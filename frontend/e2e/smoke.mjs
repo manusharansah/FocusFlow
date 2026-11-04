@@ -83,6 +83,28 @@ console.log(`\nSmoke test against ${BASE}\n`);
       const r = await page.request.get(`${BASE}${p}`); assert(r.status() === 401, `${p} -> ${r.status()}`);
     }
   });
+  await check('Dark theme is the default, even when the OS prefers light; the toggle persists', async () => {
+    const lc = await browser.newContext({ colorScheme: 'light' }); const lp = await lc.newPage();
+    await lp.goto(`${BASE}/`); await lp.waitForSelector('h1');
+    const theme = () => lp.evaluate(() => document.documentElement.dataset.theme);
+    assert(await theme() === 'dark', `default theme was ${await theme()}`);
+    const bg = await lp.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const lightness = (c) => {
+      const ok = c.match(/oklch\(\s*([\d.]+)(%?)/); if (ok) return ok[2] ? Number(ok[1]) / 100 : Number(ok[1]);
+      const rgb = c.match(/rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/); if (rgb) return (0.2126 * rgb[1] + 0.7152 * rgb[2] + 0.0722 * rgb[3]) / 255;
+      return null;
+    };
+    const L = lightness(bg); assert(L !== null && L < 0.3, `body background is not dark: ${bg}`);
+    await lp.click('.theme-btn'); assert(await theme() === 'light', 'toggle did not switch to light');
+    await lp.reload(); await lp.waitForSelector('h1'); assert(await theme() === 'light', 'choice not remembered after reload');
+    await lc.close();
+  });
+  await check('New logo is served (favicon, icons, manifest)', async () => {
+    for (const f of ['/favicon.svg', '/icon-192.png', '/icon-512.png', '/manifest.json']) {
+      const r = await page.request.get(`${BASE}${f}`); assert(r.ok(), `${f} -> ${r.status()}`);
+    }
+    assert((await (await page.request.get(`${BASE}/favicon.svg`)).text()).includes('<svg'), 'favicon is not an svg');
+  });
   await check('Webhook rejects unsigned requests', async () => {
     const r = await page.request.post(`${BASE}/api/payments/webhook/`, { data: '{}', headers: { 'content-type': 'application/json' } });
     assert([400, 503].includes(r.status()), `status ${r.status()}`);
@@ -126,12 +148,13 @@ console.log(`\nSmoke test against ${BASE}\n`);
   await check('Session cookie is HttpOnly and no token is in storage', async () => {
     const cookies = await ctx.cookies(); const refresh = cookies.find((c) => c.name === 'ff_refresh');
     assert(refresh?.httpOnly, 'refresh cookie missing or not HttpOnly');
-    assert((await page.evaluate(() => Object.keys(localStorage).concat(Object.keys(sessionStorage)).length)) === 0, 'storage not empty');
+    assert((await page.evaluate(() => Object.keys(localStorage).concat(Object.keys(sessionStorage)).filter((k) => k !== 'ff-theme').length)) === 0, 'storage holds data other than the theme preference');
     assert(!(await page.evaluate(() => document.cookie)).includes('ff_refresh'), 'refresh cookie visible to JS');
   });
   const tok = await apiTok(page);
   const cleanup = async () => {
     const list = await page.evaluate(async (t) => (await (await fetch('/api/tasks/?page_size=200', { headers: { Authorization: `Bearer ${t}` } })).json()).results, tok);
+    if (!Array.isArray(list)) return; // e.g. throttled; nothing to clean
     for (const t of list.filter((x) => x.title.startsWith('smoke-')))
       await page.evaluate(async ([id, tk]) => fetch(`/api/tasks/${id}/`, { method: 'DELETE', headers: { Authorization: `Bearer ${tk}` } }), [t.id, tok]);
   };

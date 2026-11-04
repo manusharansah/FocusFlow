@@ -137,7 +137,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .site-nav-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 800; font-size: 20px; color: var(--text); letter-spacing: -.02em; }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 32px; height: 32px; border-radius: 10px; background: var(--gradient); display: grid; place-items: center; color: #fff; box-shadow: var(--glow); }
+.brand-mark { width: 36px; height: 36px; border-radius: 11px; background: var(--gradient); display: grid; place-items: center; color: #fff; box-shadow: var(--glow); }
 .nav-links { display: flex; align-items: center; gap: 8px; }
 .nav-links a:not(.btn) { color: var(--muted); font-weight: 500; padding: 9px 14px; border-radius: 10px; }
 .nav-links a:not(.btn):hover { color: var(--text); background: var(--surface-2); text-decoration: none; }

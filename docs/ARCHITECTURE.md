@@ -34,5 +34,5 @@ implements account erasure; payments keep a null user so financial records survi
 
 ## Throttling
 
-DRF scoped throttles: `auth` 20/min (+ per-account lockout) (login/register/confirmations), `refresh` 60/min, `sensitive` 5/hour (e-mail sending),
+DRF scoped throttles: `auth` 20/min (+ per-account lockout) (login/register/confirmations), `refresh` 300/min, `sensitive` 5/hour (e-mail sending),
 `payments` 20/hour, plus anon/user defaults. Set `REDIS_URL` so limits are shared across workers.

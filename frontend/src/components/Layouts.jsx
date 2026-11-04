@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import Icon, { BrandMark } from './Icon';
+import Icon, { BrandMark, Wordmark } from './Icon';
 import ThemeToggle from './ThemeToggle';
 
 const TITLES = {
@@ -34,7 +34,7 @@ export function PublicLayout() {
       <SkipLink />
       <header className="site-nav">
         <div className="site-nav-inner">
-          <Link to="/" className="brand"><BrandMark />FocusFlow</Link>
+          <Link to="/" className="brand"><BrandMark /><Wordmark /></Link>
           <nav className="nav-links" aria-label="Main">
             <Link to="/pricing" className="hide-sm">Pricing</Link>
             <ThemeToggle />
@@ -105,7 +105,7 @@ export function AppLayout() {
     <div className="shell">
       <SkipLink />
       <aside id="sidebar" className={`sidebar${open ? ' open' : ''}`} aria-label="Sidebar">
-        <Link to="/app" className="brand"><BrandMark />FocusFlow</Link>
+        <Link to="/app" className="brand"><BrandMark /><Wordmark /></Link>
         <div>
           <div className="side-label">Workspace</div>
           <nav className="side-nav" aria-label="Workspace" onClick={() => setOpen(false)}>

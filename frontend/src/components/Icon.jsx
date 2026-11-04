@@ -40,6 +40,19 @@ export default function Icon({ name, size = 18, strokeWidth = 1.9, ...rest }) {
   );
 }
 
+/** Logo: an open focus ring with a flow wave inside. */
 export function BrandMark() {
-  return <span className="brand-mark"><Icon name="check" size={16} strokeWidth={3} /></span>;
+  return (
+    <span className="brand-mark" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 64 64" fill="none" stroke="#fff" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M46.5 21.5A18 18 0 1 0 50 32" strokeWidth="5.5" />
+        <path d="M22 33c4-7 8 7 12 0s6-4 8-2" strokeWidth="4.5" />
+      </svg>
+    </span>
+  );
+}
+
+export function Wordmark() {
+  // One element, so the flex gap on .brand does not split the two halves of the name.
+  return <span className="wordmark">Focus<span className="gradient-text">Flow</span></span>;
 }
