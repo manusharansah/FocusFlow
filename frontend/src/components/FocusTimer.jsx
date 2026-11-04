@@ -6,7 +6,7 @@ const PRESETS = [15, 25, 45, 60];
 
 export default function FocusTimer({ tasks = [] }) {
   const [minutes, setMinutes] = useState(25);
-  const [endsAt, setEndsAt] = useState(null); // timestamp: robust to tab throttling
+  const [endsAt, setEndsAt] = useState(null); // timestamp, so the time stays correct when the browser throttles a background tab
   const [paused, setPaused] = useState(false);
   const [left, setLeft] = useState(25 * 60);
   const [taskId, setTaskId] = useState('');

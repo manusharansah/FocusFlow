@@ -142,7 +142,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/min',
         'user': '300/min',
-        'auth': '20/min',          # per IP; brute force is additionally capped per account (users.views.LOGIN_ATTEMPTS)
+        'auth': '20/min',          # per IP; brute force is also capped per account (users.views.LOGIN_ATTEMPTS)
         'refresh': '60/min',       # session restore on page load
         'sensitive': '5/hour',     # password reset, verification e-mails
         'payments': '20/hour',

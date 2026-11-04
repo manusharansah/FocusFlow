@@ -68,7 +68,7 @@ cd backend  && DEBUG=True python manage.py test
 cd frontend && npm run lint && npm test && npm run build
 ```
 
-CI (`.github/workflows/ci.yml`) additionally runs `manage.py check --deploy`, `pip-audit`, `npm audit` and gitleaks.
+CI (`.github/workflows/ci.yml`) also runs `manage.py check --deploy`, `pip-audit`, `npm audit` and gitleaks.
 
 ## Production
 

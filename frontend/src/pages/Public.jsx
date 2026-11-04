@@ -7,10 +7,10 @@ import Loading from '../components/Loading';
 import { formatMoney } from '../utils/format';
 
 const FEATURES = [
-  { icon: 'tasks', title: 'Tasks that stay organised', text: 'Prioritise, set due dates and switch between a list and a board.' },
-  { icon: 'timer', title: 'Focused work sessions', text: 'Time-boxed sessions linked to the task you are working on.' },
-  { icon: 'chart', title: 'See your progress', text: 'Weekly charts for completed work and focus time.' },
-  { icon: 'shield', title: 'Your data stays yours', text: 'Export or delete everything from your account at any time.' },
+  { icon: 'tasks', title: 'List and board views', text: 'Give each task a priority and a due date. Switch between a list and a three-column board, and drag cards between To do, In progress and Done.' },
+  { icon: 'timer', title: 'Focus timer', text: 'Run a 15, 25, 45 or 60 minute session, link it to a task, and review your past sessions. Included in Premium.' },
+  { icon: 'chart', title: 'Weekly charts', text: 'See how many tasks you finished each day over the last 7 days, and how your tasks split by priority.' },
+  { icon: 'shield', title: 'Export and delete', text: 'Download all your data as a JSON file, or delete your account from the Account page. Deleting also cancels your subscription.' },
 ];
 
 const FEATURE_TONES = ['t1', 't2', 't3', 't4'];
@@ -21,9 +21,9 @@ export function Landing() {
   return (
     <>
       <section className="hero container">
-        <span className="eyebrow"><Icon name="sparkles" size={16} />Tasks, focus and insights in one place</span>
-        <h1>Plan your work. <span className="gradient-text">Focus deeply.</span> Finish more.</h1>
-        <p className="lead">FocusFlow brings tasks, a focus timer and simple analytics into one calm, fast workspace.</p>
+        <span className="eyebrow"><Icon name="sparkles" size={16} />A task manager with a built-in focus timer</span>
+        <h1>Track your tasks and <span className="gradient-text">time your focus</span></h1>
+        <p className="lead">Add tasks with priorities and due dates, move them across a board, and run timed focus sessions. A weekly chart shows what you finished.</p>
         <div className="hero-cta">
           <Link to="/register" className="btn btn-lg">Start for free</Link>
           <Link to="/pricing" className="btn btn-secondary btn-lg">View pricing</Link>
@@ -45,8 +45,8 @@ export function Landing() {
         </div>
       </section>
       <section className="section container">
-        <h2>Everything you need, <span className="gradient-text">nothing you do not</span></h2>
-        <p className="sub">Start free with up to 10 tasks. Upgrade for unlimited tasks and the focus timer.</p>
+        <h2>What is <span className="gradient-text">included</span></h2>
+        <p className="sub">The free plan has up to 10 tasks. Premium removes the limit and adds the focus timer.</p>
         <div className="feature-grid">
           {FEATURES.map((f, i) => (
             <div className="card feature" key={f.title}><div className={`ico ${FEATURE_TONES[i]}`}><Icon name={f.icon} size={22} /></div><h3>{f.title}</h3><p>{f.text}</p></div>
@@ -87,8 +87,8 @@ export function Pricing() {
 
   return (
     <section className="section container">
-      <h2>Simple, transparent pricing</h2>
-      <p className="sub">Start free. Upgrade when you are ready. Cancel anytime.</p>
+      <h2>Pricing</h2>
+      <p className="sub">Start free. Upgrade when you need more than 10 tasks. Cancel anytime from your account.</p>
       {catalog && catalog.length > 1 && (
         <div className="cycle"><div className="tabs" role="group" aria-label="Billing period">
           <button type="button" aria-pressed={cycle === 'monthly'} onClick={() => setCycle('monthly')}>Monthly</button>
@@ -98,18 +98,18 @@ export function Pricing() {
       {error && <div className="alert alert-error" style={{ maxWidth: 480, margin: '20px auto 0' }} role="alert">{error}</div>}
       <div className="price-grid">
         <div className="card plan">
-          <div><h3>Free</h3><p className="card-sub">For getting organised</p></div>
+          <div><h3>Free</h3><p className="card-sub">Up to 10 tasks</p></div>
           <div className="amount">$0<small> / forever</small></div>
           <ul><Item>Up to 10 tasks</Item><Item>List and board views</Item><Item>Basic insights</Item><Item off>Focus timer</Item><Item off>Advanced insights</Item></ul>
           {user ? <button className="btn btn-secondary" disabled>{user.is_premium ? 'Included' : 'Current plan'}</button> : <Link to="/register" className="btn btn-secondary">Get started</Link>}
         </div>
         <div className="card plan featured">
           <span className="badge badge-accent tag"><Icon name="sparkles" size={14} />Most popular</span>
-          <div><h3>Premium</h3><p className="card-sub">For people who ship</p></div>
+          <div><h3>Premium</h3><p className="card-sub">No task limit, plus the focus timer</p></div>
           {catalog === null ? <Loading /> : plan
             ? <div className="amount">{formatMoney(plan.amount, plan.currency)}<small> / {plan.interval}</small></div>
             : <div className="card-sub">Pricing is not available right now.</div>}
-          <ul><Item>Unlimited tasks</Item><Item>List and board views</Item><Item>Focus timer with session history</Item><Item>Advanced insights</Item><Item>Priority email support</Item></ul>
+          <ul><Item>Unlimited tasks</Item><Item>List and board views</Item><Item>Focus timer with session history</Item><Item>Advanced insights</Item></ul>
           {user?.is_premium
             ? <button className="btn" disabled>Current plan</button>
             : <button className="btn" onClick={upgrade} disabled={busy || (user && !plan)}>{busy ? 'Redirecting...' : user ? 'Upgrade to Premium' : 'Sign up to upgrade'}</button>}
@@ -147,7 +147,7 @@ export function PaymentSuccess() {
   return (
     <div className="auth-wrap"><div className="card auth-card" style={{ textAlign: 'center' }}>
       {state === 'ok' && <><h1>You are on Premium</h1><p className="sub">Thank you. All Premium features are now unlocked.</p><Link to="/app" className="btn btn-block">Go to your workspace</Link></>}
-      {state === 'pending' && <><h1>Payment received</h1><p className="sub">We are still confirming it with Stripe. Premium will unlock automatically in a minute.</p><Link to="/app" className="btn btn-block">Back to workspace</Link></>}
+      {state === 'pending' && <><h1>Payment received</h1><p className="sub">Stripe has not confirmed it yet. Premium unlocks as soon as it does, usually within a minute.</p><Link to="/app" className="btn btn-block">Back to workspace</Link></>}
       {state === 'error' && <><h1>We could not confirm this payment</h1><p className="sub">If you were charged, your plan will activate shortly. Otherwise try again.</p><Link to="/pricing" className="btn btn-block">Back to pricing</Link></>}
     </div></div>
   );
