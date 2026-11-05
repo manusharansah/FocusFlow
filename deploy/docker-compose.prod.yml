@@ -1,0 +1,83 @@
+# Single-server production stack. From the repository root:
+#   cp deploy/.env.example deploy/.env && cp deploy/backend.env.example deploy/backend.env   # then fill both in
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+services:
+  caddy:
+    build: { context: .., dockerfile: deploy/Dockerfile.caddy }
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+    volumes: [caddy_data:/data, caddy_config:/config]
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+  backend:
+    build: ../backend
+    env_file: ./backend.env
+    environment:
+      DATABASE_URL: postgres://focusflow:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/focusflow
+      REDIS_URL: redis://redis:6379/1
+      FRONTEND_URL: https://${DOMAIN}
+      BACKEND_URL: https://${DOMAIN}
+      ALLOWED_HOSTS: ${DOMAIN}
+      CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      BEHIND_PROXY: "True"
+      NUM_PROXIES: "1"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 30 --max-requests 1000 --max-requests-jitter 100 --worker-tmp-dir /dev/shm --access-logfile -
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://localhost:8000/api/health/', headers={'X-Forwarded-Proto': 'https'}), timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+  migrate:
+    build: ../backend
+    env_file: ./backend.env
+    environment:
+      DATABASE_URL: postgres://focusflow:${POSTGRES_PASSWORD}@db:5432/focusflow
+      FRONTEND_URL: https://${DOMAIN}
+      BACKEND_URL: https://${DOMAIN}
+    command: python manage.py migrate --noinput
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: focusflow
+      POSTGRES_USER: focusflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U focusflow -d focusflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  backup:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    # Daily compressed dump into ./backups; dumps older than 14 days are pruned. Also copy them off the server (S3).
+    entrypoint: ["/bin/sh", "-c", "while true; do pg_dump -h db -U focusflow focusflow | gzip > /backups/focusflow-$$(date +%F).sql.gz; find /backups -name '*.sql.gz' -mtime +14 -delete; sleep 86400; done"]
+    volumes: [./backups:/backups]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

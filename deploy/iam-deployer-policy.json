@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOnlyIdentity",
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity", "ec2:Describe*", "ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation", "ssm:ListCommandInvocations"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ServerLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RunInstances", "ec2:TerminateInstances", "ec2:StopInstances", "ec2:StartInstances", "ec2:CreateTags",
+        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
+        "ec2:AllocateAddress", "ec2:AssociateAddress", "ec2:DisassociateAddress", "ec2:ReleaseAddress",
+        "ec2:CreateVolume", "ec2:AttachVolume", "ec2:ModifyInstanceMetadataOptions"
+      ],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-east-1" } }
+    },
+    {
+      "Sid": "RunCommandsWithoutSSH",
+      "Effect": "Allow",
+      "Action": ["ssm:SendCommand"],
+      "Resource": ["arn:aws:ssm:us-east-1::document/AWS-RunShellScript", "arn:aws:ec2:us-east-1:*:instance/*"]
+    },
+    {
+      "Sid": "ReleaseBucket",
+      "Effect": "Allow",
+      "Action": ["s3:CreateBucket", "s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:ListBucket", "s3:PutBucketPublicAccessBlock", "s3:PutEncryptionConfiguration"],
+      "Resource": ["arn:aws:s3:::focusflow-releases-*", "arn:aws:s3:::focusflow-releases-*/*"]
+    },
+    {
+      "Sid": "InstanceRoleForSsm",
+      "Effect": "Allow",
+      "Action": ["iam:CreateRole", "iam:AttachRolePolicy", "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile", "iam:GetRole", "iam:GetInstanceProfile"],
+      "Resource": ["arn:aws:iam::*:role/focusflow-*", "arn:aws:iam::*:instance-profile/focusflow-*"]
+    },
+    {
+      "Sid": "PassOnlyTheFocusFlowRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/focusflow-*",
+      "Condition": { "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" } }
+    }
+  ]
+}

@@ -18,3 +18,8 @@ frontend/build/
 .DS_Store
 .idea/
 .vscode/
+
+# Deployment secrets and backups
+deploy/.env
+deploy/backend.env
+deploy/backups/

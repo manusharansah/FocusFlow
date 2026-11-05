@@ -80,6 +80,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURIT
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how auth, billing and data fit together
 - [docs/SECURITY.md](docs/SECURITY.md) - threat model, controls, incident checklist
 - [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md) - Google sign-in setup
+- [docs/DEPLOYMENT_AWS.md](docs/DEPLOYMENT_AWS.md) - one-server AWS deployment with HTTPS (start here to go live)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - environment, domains, Stripe/Google/email setup, backups
 - [docs/ROADMAP.md](docs/ROADMAP.md) - services needed to compete internationally
 
