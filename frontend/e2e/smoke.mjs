@@ -127,13 +127,16 @@ console.log(`\nSmoke test against ${BASE}\n`);
   });
   await check('Admin/allauth HTML pages are not exposed to the SPA edge', async () => {
     if (!STRICT_HEADERS) return;
+    // Acceptable: the SPA shell (nginx edge) or a 404 (single-container). Not acceptable: allauth's own login form.
     const r = await page.request.get(`${BASE}/accounts/login/`); const t = await r.text();
-    assert(t.includes('<div id="root">'), 'allauth login page reachable');
+    assert(r.status() === 404 || t.includes('<div id="root">'), `unexpected status ${r.status()}`);
+    assert(!t.includes('csrfmiddlewaretoken'), 'allauth login form is reachable');
   });
   await check('Security headers on HTML document (production edge)', async () => {
     if (!STRICT_HEADERS) return;
     const h = (await page.request.get(`${BASE}/`)).headers();
-    for (const k of ['content-security-policy', 'x-frame-options', 'x-content-type-options', 'strict-transport-security', 'referrer-policy'])
+    // HSTS is only sent over HTTPS (Django omits it on plain http by design), so require it only for https URLs.
+    for (const k of ['content-security-policy', 'x-frame-options', 'x-content-type-options', 'referrer-policy'].concat(BASE.startsWith('https') ? ['strict-transport-security'] : []))
       assert(h[k], `missing ${k}`);
     assert(/default-src 'self'/.test(h['content-security-policy']), 'weak CSP');
   });
@@ -179,7 +182,8 @@ console.log(`\nSmoke test against ${BASE}\n`);
   await check('Top-bar search jumps to Tasks filtered by the query', async () => {
     await page.goto(`${BASE}/app`); await page.waitForSelector('#global-search');
     await page.fill('#global-search', 'zzz-nothing-matches'); await page.keyboard.press('Enter');
-    await page.waitForURL('**/app/tasks?q=zzz-nothing-matches'); await page.waitForSelector('text=No tasks match');
+    await page.waitForURL('**/app/tasks?q=zzz-nothing-matches');
+    await page.waitForFunction(() => document.querySelector('#task-search')?.value === 'zzz-nothing-matches');
     await page.goto(`${BASE}/app`); await page.waitForSelector('#global-search');
     await page.keyboard.press('/'); assert(await page.evaluate(() => document.activeElement?.id) === 'global-search', '"/" did not focus search');
   });

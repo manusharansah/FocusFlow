@@ -71,7 +71,7 @@ CI (`.github/workflows/ci.yml`) also runs `manage.py check --deploy`, `pip-audit
 
 ## Production
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURITY.md).
+See [docs/DEPLOYMENT_FREE.md](docs/DEPLOYMENT_FREE.md) for the free setup, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the settings reference, and [docs/SECURITY.md](docs/SECURITY.md).
 `docker compose up --build` gives a production-like stack (Postgres, gunicorn, nginx with CSP).
 
 ## Documentation
@@ -80,7 +80,8 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/SECURITY.md](docs/SECURIT
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how auth, billing and data fit together
 - [docs/SECURITY.md](docs/SECURITY.md) - threat model, controls, incident checklist
 - [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md) - Google sign-in setup
-- [docs/DEPLOYMENT_AWS.md](docs/DEPLOYMENT_AWS.md) - one-server AWS deployment with HTTPS (start here to go live)
+- [docs/DEPLOYMENT_FREE.md](docs/DEPLOYMENT_FREE.md) - free deployment on Google Cloud Run and Neon (start here to go live)
+- [docs/DEPLOYMENT_AWS.md](docs/DEPLOYMENT_AWS.md) - paid alternative: one AWS server with HTTPS
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - environment, domains, Stripe/Google/email setup, backups
 - [docs/ROADMAP.md](docs/ROADMAP.md) - services needed to compete internationally
 

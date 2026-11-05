@@ -35,12 +35,19 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured('SECRET_KEY environment variable is required when DEBUG is off.')
 
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000' if DEBUG or TESTING else '').rstrip('/')
-BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000' if DEBUG or TESTING else '').rstrip('/')
+# Single-container hosting (Cloud Run and similar): the app serves both the SPA and the API from PUBLIC_URL.
+_PUBLIC_URL = os.environ.get('PUBLIC_URL', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', _PUBLIC_URL or ('http://localhost:3000' if DEBUG or TESTING else '')).rstrip('/')
+BACKEND_URL = os.environ.get('BACKEND_URL', _PUBLIC_URL or ('http://localhost:8000' if DEBUG or TESTING else '')).rstrip('/')
 if not DEBUG and not TESTING and not (FRONTEND_URL and BACKEND_URL):
     raise ImproperlyConfigured('FRONTEND_URL and BACKEND_URL are required when DEBUG is off.')
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG or TESTING else '')
+if _PUBLIC_URL:
+    from urllib.parse import urlparse
+    _host = urlparse(_PUBLIC_URL).hostname
+    if _host and _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -68,6 +75,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'config.middleware.SecurityHeadersMiddleware',  # outside WhiteNoise so static/SPA files get the headers too
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -101,12 +109,18 @@ DATABASES = {
         conn_health_checks=True,
     )
 }
+if env_bool('DB_POOLER', False):
+    # Transaction-mode poolers (Neon pooled string, Supabase port 6543) do not support server-side cursors.
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- Cache (used for throttling) -----------------------------------------
 if os.environ.get('REDIS_URL'):
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache',
                           'LOCATION': os.environ['REDIS_URL']}}
+elif env_bool('USE_DB_CACHE', False) and not TESTING:
+    # Shared across workers and restarts without Redis (rate limits). Create it with `manage.py createcachetable`.
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'django_cache'}}
 else:
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
@@ -244,6 +258,16 @@ else:
 # --- Static / i18n ---------------------------------------------------------
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+ADMIN_ENABLED = env_bool('ADMIN_ENABLED', True)
+
+# Single-service hosting: Django serves the built React app too (see config.urls.spa_index).
+FRONTEND_DIST = Path(os.environ.get('FRONTEND_DIST', BASE_DIR.parent / 'frontend' / 'build'))
+if (FRONTEND_DIST / 'index.html').exists():
+    WHITENOISE_ROOT = FRONTEND_DIST
+    WHITENOISE_INDEX_FILE = True
+    WHITENOISE_MAX_AGE = 0  # index.html must revalidate so a new deployment shows at once; /assets/* is immutable below
+    WHITENOISE_IMMUTABLE_FILE_TEST = lambda path, url: url.startswith('/assets/')  # noqa: E731  (hashed build files)
+SECURE_REDIRECT_EXEMPT = [r'^api/health/$']  # the host's health check calls over plain http
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'

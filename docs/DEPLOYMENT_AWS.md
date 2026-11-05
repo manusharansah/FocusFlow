@@ -1,5 +1,7 @@
 # Deploying to AWS (one server)
 
+This is the paid option, about 15 to 20 USD a month. For a free setup, use `docs/DEPLOYMENT_FREE.md`.
+
 This is the cheapest setup that is still reliable for a first production launch. One small server runs everything
 behind Caddy, which gets and renews the HTTPS certificate by itself.
 
